@@ -1972,6 +1972,374 @@ function renderMetarResult(m, taf, icao) {
     </div>
     ${tafHTML}
     <div class="last-updated" style="margin:4px 16px 12px">Fonte: NOAA Aviation Weather Center · aviationweather.gov</div>
+    <div id="gps-sat-card" style="margin:0 16px 12px">
+      <div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:16px;padding:14px 16px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">
+          🛰 Satelliti GNSS visibili
+        </div>
+        <div id="gps-sat-body">
+          <button onclick="initGpsSat()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--glass-border);
+            background:var(--glass);color:var(--text);font-size:13px;cursor:pointer">
+            📡 Richiedi posizione GPS
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// GPS SATELLITI — TLE reali da GitHub Pages (aggiornati ogni giorno)
+// ============================================================
+
+// ⚙️ CONFIGURA QUI il tuo repository GitHub Pages dopo il setup
+const TLE_BASE = 'https://TUO_UTENTE.github.io/gnss-tle';
+
+const GNSS_CONSTELLATIONS = [
+  { id: 'GPS',     name: 'GPS',     color: '#4ade80', file: 'gps'     },
+  { id: 'GLONASS', name: 'GLONASS', color: '#60a5fa', file: 'glonass' },
+  { id: 'GALILEO', name: 'Galileo', color: '#f59e0b', file: 'galileo' },
+  { id: 'BEIDOU',  name: 'BeiDou',  color: '#f87171', file: 'beidou'  },
+];
+
+// Cache TLE in memoria (evita re-fetch ad ogni aggiornamento 60s)
+const tleCache = {};
+let tleMeta = null;
+
+async function fetchTLE(constId, file) {
+  // Usa cache se presente e recente (max 6 ore)
+  if (tleCache[constId] && (Date.now() - tleCache[constId].ts) < 6*3600*1000) {
+    return tleCache[constId].sats;
+  }
+
+  const url = `${TLE_BASE}/tle/${file}.tle`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status} per ${file}.tle`);
+  const text = await r.text();
+  if (!text || text.length < 50 || text.includes('<html')) {
+    throw new Error(`Risposta non valida per ${file}.tle`);
+  }
+
+  // Parsa TLE
+  const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  const sats = [];
+  for (let i = 0; i < lines.length - 2; i += 3) {
+    if (lines[i+1]?.startsWith('1 ') && lines[i+2]?.startsWith('2 ')) {
+      sats.push({ name: lines[i], line1: lines[i+1], line2: lines[i+2] });
+    }
+  }
+  if (sats.length === 0) throw new Error(`Nessun satellite trovato in ${file}.tle`);
+
+  tleCache[constId] = { sats, ts: Date.now() };
+  return sats;
+}
+
+// Calcola satelliti visibili per una costellazione
+function calcVisible(sats, lat, lon, now) {
+  const visible = [];
+  for (const sat of sats) {
+    const r = satElevation(sat.line1, sat.line2, lat, lon, now);
+    if (r && r.el >= 0) visible.push({ ...sat, el: r.el, az: r.az, range: r.range });
+  }
+  visible.sort((a, b) => b.el - a.el);
+  return visible;
+}const GNSS_CONSTELLATIONS = [
+  { id: 'GPS',     name: 'GPS',     color: '#4ade80' },
+  { id: 'GLONASS', name: 'GLONASS', color: '#60a5fa' },
+  { id: 'GALILEO', name: 'Galileo', color: '#f59e0b' },
+  { id: 'BEIDOU',  name: 'BeiDou',  color: '#f87171' },
+];
+
+// Nessun fetch necessario — TLE sono embedded
+// Calcola satelliti visibili per una costellazione
+function calcVisible(constId, lat, lon, now) {
+  const sats = EMBEDDED_TLE[constId] || [];
+  const visible = [];
+  for (const sat of sats) {
+    const r = satElevation(sat.line1, sat.line2, lat, lon, now);
+    if (r && r.el >= 0) visible.push({ ...sat, el: r.el, az: r.az, range: r.range });
+  }
+  visible.sort((a,b) => b.el - a.el);
+  return visible;
+}
+
+// Propagazione SGP4 semplificata
+// Propagazione SGP4 semplificata — calcola posizione satellite in ECI
+// Poi converte in azimuth/elevation dall'osservatore
+function satElevation(tle1, tle2, lat, lon, now) {
+  try {
+    const rad = Math.PI / 180;
+
+    // Estrai parametri TLE
+    const incl   = parseFloat(tle2.slice(8,16))  * rad;
+    const raan   = parseFloat(tle2.slice(17,25)) * rad;
+    const eccStr = '0.' + tle2.slice(26,33).trim();
+    const ecc    = parseFloat(eccStr);
+    const argp   = parseFloat(tle2.slice(34,42)) * rad;
+    const mm     = parseFloat(tle2.slice(52,63)); // mean motion rev/day
+    const epoch  = tle1.slice(18,32);
+
+    // Calcola tempo dall'epoca TLE
+    const ey = parseInt(epoch.slice(0,2));
+    const year = ey < 57 ? 2000 + ey : 1900 + ey;
+    const doy  = parseFloat(epoch.slice(2));
+    const epochDate = new Date(Date.UTC(year, 0, 1) + (doy - 1) * 86400000);
+    const dt = (now - epochDate) / 86400000; // giorni
+
+    // Anomalia media
+    const n  = mm * 2 * Math.PI / 86400; // rad/s
+    const M0 = parseFloat(tle2.slice(43,51)) * rad;
+    const M  = (M0 + n * dt * 86400) % (2 * Math.PI);
+
+    // Anomalia eccentrica (iterazione di Kepler)
+    let E = M;
+    for (let i = 0; i < 10; i++) E = M + ecc * Math.sin(E);
+
+    // Anomalia vera
+    const nu = 2 * Math.atan2(Math.sqrt(1+ecc)*Math.sin(E/2), Math.sqrt(1-ecc)*Math.cos(E/2));
+
+    // Raggio orbitale (km)
+    const a = Math.pow(86400 / (mm * 2 * Math.PI), 2/3) * 6378.137 * Math.pow(398600.4418, 1/3) / Math.pow(398600.4418, 1/3);
+    const mu = 398600.4418;
+    const a_km = Math.pow(mu / (n*n), 1/3);
+    const r = a_km * (1 - ecc * Math.cos(E));
+
+    // Posizione in piano orbitale
+    const x_orb = r * Math.cos(nu);
+    const y_orb = r * Math.sin(nu);
+
+    // Rotazione in ECI (J2000 appross.)
+    const cos_raan = Math.cos(raan), sin_raan = Math.sin(raan);
+    const cos_incl = Math.cos(incl), sin_incl = Math.sin(incl);
+    const cos_argp = Math.cos(argp), sin_argp = Math.sin(argp);
+
+    const x = (cos_raan*cos_argp - sin_raan*sin_argp*cos_incl)*x_orb +
+              (-cos_raan*sin_argp - sin_raan*cos_argp*cos_incl)*y_orb;
+    const y = (sin_raan*cos_argp + cos_raan*sin_argp*cos_incl)*x_orb +
+              (-sin_raan*sin_argp + cos_raan*cos_argp*cos_incl)*y_orb;
+    const z = (sin_argp*sin_incl)*x_orb + (cos_argp*sin_incl)*y_orb;
+
+    // GMST (ora siderale di Greenwich)
+    const JD = now / 86400000 + 2440587.5;
+    const T  = (JD - 2451545.0) / 36525.0;
+    const gmst = (280.46061837 + 360.98564736629*(JD-2451545.0) + T*T*(0.000387933 - T/38710000)) % 360;
+    const gmstRad = gmst * rad;
+
+    // ECI → ECEF
+    const xe = x * Math.cos(gmstRad) + y * Math.sin(gmstRad);
+    const ye = -x * Math.sin(gmstRad) + y * Math.cos(gmstRad);
+    const ze = z;
+
+    // ECEF → Topocentric (az/el dall'osservatore)
+    const latr = lat * rad, lonr = lon * rad;
+    const Re = 6378.137;
+    const x0 = Re * Math.cos(latr) * Math.cos(lonr);
+    const y0 = Re * Math.cos(latr) * Math.sin(lonr);
+    const z0 = Re * Math.sin(latr);
+
+    const dx = xe - x0, dy = ye - y0, dz = ze - z0;
+
+    const S = Math.sin(latr)*Math.cos(lonr)*dx + Math.sin(latr)*Math.sin(lonr)*dy - Math.cos(latr)*dz;
+    const E2= -Math.sin(lonr)*dx + Math.cos(lonr)*dy;
+    const Z = Math.cos(latr)*Math.cos(lonr)*dx + Math.cos(latr)*Math.sin(lonr)*dy + Math.sin(latr)*dz;
+
+    const range = Math.sqrt(S*S + E2*E2 + Z*Z);
+    const el = Math.asin(Z / range) / rad;
+    const az = (Math.atan2(-E2, S) / rad + 360) % 360;
+
+    return { el, az, range };
+  } catch(e) {
+    return null;
+  }
+}
+
+async function initGpsSat() {
+  const body = document.getElementById('gps-sat-body');
+  if (!body) return;
+  body.innerHTML = `<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px">
+    📍 Richiedo posizione GPS...</div>`;
+
+  // 1. Ottieni posizione dal browser
+  if (!navigator.geolocation) {
+    body.innerHTML = `<div style="color:var(--muted);font-size:12px;text-align:center">GPS non supportato dal browser.</div>`;
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    gpsSatPos = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
+
+    // Controlla se TLE_BASE è configurato
+    if (TLE_BASE.includes('TUO_UTENTE')) {
+      body.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted)">
+        <div style="font-size:24px">⚙️</div>
+        <div style="margin-top:8px;font-size:13px">
+          <b>Configura il backend GitHub Pages</b><br>
+          <span style="font-size:11px;opacity:.7">Segui le istruzioni nel README del repository <code>gnss-tle</code>
+          e sostituisci <code>TUO_UTENTE</code> nell'app con il tuo username GitHub.</span>
+        </div>
+      </div>`;
+      return;
+    }
+
+    const now = new Date();
+    const constellationResults = [];
+    const allSats = [];
+
+    // Carica meta.json per mostrare data aggiornamento TLE
+    try {
+      const mRes = await fetch(`${TLE_BASE}/tle/meta.json`, { signal: AbortSignal.timeout(5000) });
+      if (mRes.ok) tleMeta = await mRes.json();
+    } catch(e) {}
+
+    for (let ci = 0; ci < GNSS_CONSTELLATIONS.length; ci++) {
+      const c = GNSS_CONSTELLATIONS[ci];
+      body.innerHTML = `<div style="font-size:12px;color:var(--muted);text-align:center;padding:12px">
+        📍 ${gpsSatPos.lat.toFixed(3)}°N ${gpsSatPos.lon.toFixed(3)}°E (±${Math.round(gpsSatPos.accuracy)}m)<br>
+        <div style="margin-top:6px">🛰 Carico TLE ${c.name} (${ci+1}/${GNSS_CONSTELLATIONS.length})...</div>
+        <div style="margin-top:8px;height:4px;background:var(--glass-border);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${((ci)/GNSS_CONSTELLATIONS.length*100).toFixed(0)}%;background:var(--gold);border-radius:2px;transition:width .3s"></div>
+        </div>
+      </div>`;
+
+      try {
+        const sats = await fetchTLE(c.id, c.file);
+        const visible = calcVisible(sats, gpsSatPos.lat, gpsSatPos.lon, now);
+        constellationResults.push({ ...c, total: sats.length, visible, error: false });
+        allSats.push(...visible.map(s => ({...s, constellation: c.id, color: c.color})));
+      } catch(e) {
+        console.warn(`TLE ${c.id} failed:`, e.message);
+        constellationResults.push({ ...c, total: 0, visible: [], error: true, errMsg: e.message });
+      }
+    }
+
+    renderGpsSat(constellationResults, allSats, gpsSatPos, now);
+
+    // Aggiorna ogni 60s (ricalcola posizioni, non ri-scarica TLE grazie alla cache)
+    clearInterval(gpsSatInterval);
+    gpsSatInterval = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(async (pos2) => {
+        gpsSatPos = { lat: pos2.coords.latitude, lon: pos2.coords.longitude, accuracy: pos2.coords.accuracy };
+        const t = new Date();
+        const res = [], all = [];
+        for (const c of GNSS_CONSTELLATIONS) {
+          try {
+            const sats = await fetchTLE(c.id, c.file); // dalla cache
+            const vis = calcVisible(sats, gpsSatPos.lat, gpsSatPos.lon, t);
+            res.push({ ...c, total: sats.length, visible: vis, error: false });
+            all.push(...vis.map(s => ({...s, constellation: c.id, color: c.color})));
+          } catch(e) {
+            res.push({ ...c, total: 0, visible: [], error: true });
+          }
+        }
+        renderGpsSat(res, all, gpsSatPos, t);
+      }, () => {}, { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 });
+    }, 60000);
+
+  }, (err) => {
+    body.innerHTML = `<div style="color:var(--muted);font-size:12px;text-align:center;padding:10px">
+      ⚠️ Posizione non disponibile: ${err.message}</div>`;
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+}
+
+function renderGpsSat(constellations, allSats, pos, now) {
+  const body = document.getElementById('gps-sat-body');
+  if (!body) return;
+
+  const totalVis = allSats.length;
+
+  // Polar plot (sky view) — canvas SVG-like con D3-style in HTML
+  const polarSize = 200;
+  const cx = polarSize/2, cy = polarSize/2, cr = polarSize/2 - 10;
+
+  // Disegna satelliti sul polar plot
+  const satDots = allSats.map(s => {
+    // el 90° = centro, 0° = bordo
+    const rDot = cr * (1 - s.el/90);
+    const azR  = (s.az - 90) * Math.PI/180; // SVG: 0=destra, ma az 0=Nord
+    const sx   = cx + rDot * Math.cos(azR);
+    const sy   = cy + rDot * Math.sin(azR);
+    const elStr = s.el.toFixed(0);
+    return `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="5" fill="${s.color}" opacity="0.9"
+      stroke="rgba(255,255,255,0.3)" stroke-width="1">
+      <title>${s.name}\nEl: ${elStr}° Az: ${s.az.toFixed(0)}°</title>
+    </circle>
+    <text x="${(sx+6).toFixed(1)}" y="${(sy+4).toFixed(1)}" font-size="7" fill="${s.color}" opacity="0.8">${s.el.toFixed(0)}°</text>`;
+  }).join('');
+
+  const polarSVG = `
+    <svg width="${polarSize}" height="${polarSize}" viewBox="0 0 ${polarSize} ${polarSize}" style="display:block;margin:0 auto">
+      <!-- Cerchi concentrici: 0°, 30°, 60°, 90° -->
+      <circle cx="${cx}" cy="${cy}" r="${cr}"     fill="rgba(0,0,0,0.3)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <circle cx="${cx}" cy="${cy}" r="${cr*2/3}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+      <circle cx="${cx}" cy="${cy}" r="${cr/3}"   fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+      <!-- Croci N/S/E/W -->
+      <line x1="${cx}" y1="${cy-cr}" x2="${cx}" y2="${cy+cr}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+      <line x1="${cx-cr}" y1="${cy}" x2="${cx+cr}" y2="${cy}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+      <!-- Labels -->
+      <text x="${cx-3}" y="${cy-cr-3}" font-size="9" fill="rgba(255,255,255,0.35)">N</text>
+      <text x="${cx-3}" y="${cy+cr+11}" font-size="9" fill="rgba(255,255,255,0.35)">S</text>
+      <text x="${cx+cr+3}" y="${cy+4}" font-size="9" fill="rgba(255,255,255,0.35)">E</text>
+      <text x="${cx-cr-11}" y="${cy+4}" font-size="9" fill="rgba(255,255,255,0.35)">W</text>
+      <text x="${cx-4}" y="${cy+cr*2/3+4}" font-size="7" fill="rgba(255,255,255,0.25)">30°</text>
+      <text x="${cx-4}" y="${cy+cr/3+4}" font-size="7" fill="rgba(255,255,255,0.25)">60°</text>
+      ${satDots}
+    </svg>`;
+
+  // Sommario per costellazione
+  const constRows = constellations.map(c => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+      <div style="width:10px;height:10px;border-radius:50%;background:${c.color};flex-shrink:0"></div>
+      <div style="flex:1;font-size:12px;font-weight:600;color:var(--text)">${c.name}</div>
+      ${c.error ? `<div style="font-size:11px;color:var(--muted)">N/D</div>` : `
+        <div style="font-size:11px;color:var(--muted)">${c.total} totali</div>
+        <div style="font-size:13px;font-weight:700;color:${c.color};min-width:28px;text-align:right">${c.visible.length} ↑</div>
+      `}
+    </div>`).join('');
+
+  // Top 5 satelliti per elevazione
+  const top5 = allSats.slice(0,8).map(s => `
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0">
+      <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0"></div>
+      <div style="font-size:10px;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name.replace(/\s+/g,' ').trim()}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text)">${s.el.toFixed(1)}°</div>
+      <div style="font-size:10px;color:var(--muted)">${s.az.toFixed(0)}°</div>
+    </div>`).join('');
+
+  // Qualità del fix
+  const qualityColor = pos.accuracy < 5 ? '#4ade80' : pos.accuracy < 20 ? '#f59e0b' : '#f87171';
+  const qualityLabel = pos.accuracy < 5 ? 'Eccellente' : pos.accuracy < 20 ? 'Buono' : pos.accuracy < 50 ? 'Discreto' : 'Scarso';
+
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:10px;
+        padding:6px 12px;font-size:20px;font-weight:700;color:#4ade80">${totalVis}</div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--text)">satelliti visibili</div>
+        <div style="font-size:10px;color:var(--muted)">su 4 costellazioni GNSS</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:10px;color:var(--muted)">Accuratezza fix</div>
+        <div style="font-size:12px;font-weight:700;color:${qualityColor}">±${Math.round(pos.accuracy)}m — ${qualityLabel}</div>
+      </div>
+    </div>
+
+    ${constRows}
+
+    <div style="margin:10px 0 6px;font-size:10px;color:var(--muted);text-align:center">🌐 Vista polare del cielo — punti = satelliti sopra l'orizzonte</div>
+    ${polarSVG}
+
+    <div style="margin-top:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:0.5px;margin-bottom:4px">TOP ELEVAZIONE</div>
+      ${top5}
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+      <div style="font-size:9px;color:var(--muted);opacity:.6">
+        TLE: ${tleMeta ? 'Celestrak ' + tleMeta.updated.slice(0,10) : 'Celestrak'} · Aggiorn. ogni 60s · ${now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
+      </div>
+      <button onclick="initGpsSat()" style="padding:4px 10px;border-radius:8px;border:1px solid var(--glass-border);
+        background:var(--glass);color:var(--muted);font-size:10px;cursor:pointer">↺ Aggiorna</button>
+    </div>
   `;
 }
 
