@@ -1189,7 +1189,10 @@ function magLabel(m) {
   return '🚨 Grande';
 }
 function timeAgo(ts) {
-  const diff = Date.now() - ts;
+  // USGS → timestamp numerico in ms; INGV → stringa ISO "2024-05-07T10:23:00"
+  const t = typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  const diff = Date.now() - t;
+  if (isNaN(diff) || diff < 0) return '—';
   const m = Math.floor(diff / 60000);
   if (m < 1) return 'Adesso';
   if (m < 60) return `${m} min fa`;
@@ -1401,7 +1404,7 @@ function quakeListHTML(quakes, scope) {
       <div class="quake-mag ${magClass(p.mag)}">${m}</div>
       <div class="quake-info">
         <div class="quake-place">${place}</div>
-        <div class="quake-meta">${magLabel(p.mag)} · ${timeAgo(p.time)}</div>
+        <div class="quake-meta">${magLabel(p.mag)} · ${timeAgo(p.time ?? p.origintime)}</div>
       </div>
       <div class="quake-depth">🔻${depth} km</div>
     </div>`;
