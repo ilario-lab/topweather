@@ -2180,8 +2180,18 @@ function switchModelSub(name, btn) {
   if (btn) btn.classList.add('active');
   const panel = document.getElementById('msub-' + name);
   if (panel) panel.classList.add('active');
-  // Forza resize mappa se ritorna su GFS
-  if (name === 'gfs850' && gfsMap) setTimeout(() => gfsMap.invalidateSize(), 120);
+
+  if (name === 'gfs850' && gfsMap) {
+    setTimeout(() => gfsMap.invalidateSize(), 120);
+  }
+  if (name === 'lightning') {
+    // Panel ora visibile: inizializza o forza resize
+    if (!lightningMapInit) {
+      setTimeout(initLightningMap, 80);
+    } else if (lightningMap) {
+      setTimeout(() => lightningMap.invalidateSize(), 120);
+    }
+  }
 }
 
 function renderModelsShell() {
@@ -2298,43 +2308,44 @@ function renderModelsShell() {
     <div class="model-subpanel" id="msub-lightning">
       <div class="lightning-stats" id="lightning-stats">
         <div class="lightning-stat">
-          <div class="lightning-stat-val" id="blitz-count-1h">—</div>
-          <div class="lightning-stat-label">Fulmini / 1h</div>
+          <div class="lightning-stat-val" id="blitz-count-total">—</div>
+          <div class="lightning-stat-label">Fulmini totali</div>
         </div>
         <div class="lightning-stat">
-          <div class="lightning-stat-val" id="blitz-count-10m">—</div>
-          <div class="lightning-stat-label">/ 10 min</div>
+          <div class="lightning-stat-val" id="blitz-count-min">—</div>
+          <div class="lightning-stat-label">Ultimi 60s</div>
         </div>
         <div class="lightning-stat">
-          <div class="lightning-stat-val" id="blitz-last">—</div>
-          <div class="lightning-stat-label">Ultimo</div>
+          <div class="lightning-stat-val" id="blitz-ws-status" style="font-size:13px">●</div>
+          <div class="lightning-stat-label">Connessione</div>
         </div>
       </div>
-      <div class="lightning-wrap">
-        <iframe
-          src="https://www.blitzortung.org/en/live_lightning_maps.php?map=11"
-          allowfullscreen loading="lazy"
-          sandbox="allow-scripts allow-same-origin allow-popups">
-        </iframe>
+      <div class="lightning-wrap" style="height:380px">
+        <div id="lightning-map" style="width:100%;height:100%"></div>
+        <div id="lightning-overlay" style="position:absolute;inset:0;display:flex;flex-direction:column;
+          align-items:center;justify-content:center;background:rgba(6,14,24,0.82);z-index:1000;
+          gap:10px;font-size:13px;color:var(--muted);text-align:center;padding:20px">
+          <div style="font-size:32px">⚡</div>
+          <div>Connessione in corso...</div>
+          <div style="font-size:10px;opacity:0.6">Rete Blitzortung.org · WebSocket</div>
+        </div>
       </div>
       <div class="lightning-legend">
         <div class="lightning-legend-title">⚡ Legenda fulminazioni</div>
         <div class="lightning-legend-row">
-          <div class="lightning-dot"><span style="background:#ff3860"></span>< 5 min fa</div>
-          <div class="lightning-dot"><span style="background:#ff8c00"></span>5–15 min</div>
-          <div class="lightning-dot"><span style="background:#fbbf24"></span>15–30 min</div>
-          <div class="lightning-dot"><span style="background:#5bc4bb"></span>30–60 min</div>
-          <div class="lightning-dot"><span style="background:#44547a"></span>> 1 ora</div>
+          <div class="lightning-dot"><span style="background:#ff2244"></span>&lt; 30s</div>
+          <div class="lightning-dot"><span style="background:#ff8c00"></span>30s–2min</div>
+          <div class="lightning-dot"><span style="background:#fbbf24"></span>2–10 min</div>
+          <div class="lightning-dot"><span style="background:#5bc4bb"></span>10–30 min</div>
+          <div class="lightning-dot"><span style="background:#2a3a55"></span>&gt; 30 min</div>
         </div>
       </div>
       <div class="model-info-card">
-        <strong>Blitzortung.org</strong> — rete globale di rilevamento fulmini in tempo reale basata su 
-        oltre <strong>2000 stazioni private</strong> di ascolto VLF/LF distribuite in tutto il mondo. 
-        Latenza media di rilevamento: <strong>2–5 secondi</strong>. 
-        Ogni punto sulla mappa rappresenta un impatto al suolo (CG) o una scarica in quota (IC) 
-        rilevata triangolando i segnali di almeno 5 stazioni.
+        <strong>Mappa nativa in tempo reale</strong> — dati via <strong>WebSocket Blitzortung.org</strong>, 
+        rete di oltre 2000 stazioni VLF/LF distribuite globalmente. Latenza ~2–5 secondi. 
+        I punti svaniscono progressivamente in base all'età. Mappa interattiva: puoi zoomare e spostare liberamente.
       </div>
-      <div class="blitz-source">Dati: <a href="https://www.blitzortung.org" target="_blank">Blitzortung.org</a> — licenza open data CC BY-NC-SA</div>
+      <div class="blitz-source">Dati: <a href="https://www.blitzortung.org" target="_blank">Blitzortung.org</a> · CC BY-NC-SA</div>
     </div>
   `;
 
@@ -2493,54 +2504,201 @@ function gfsSetVar(v,btn) {
   if(gfsDataGrid.length) gfsDrawFrame(gfsFrameIndex);
 }
 
-// ── Lightning counter (Blitzortung public JSON) ──────────────
-let lightningTimer = null;
-let lightningHistory = [];
-let lightningCount1h = 0;
+// ── Lightning — mappa Leaflet nativa + WebSocket Blitzortung ──
+let lightningMap = null;
+let lightningWS = null;
+let lightningMarkers = [];   // {marker, ts}
+let lightningTotal = 0;
+let lightningLast60 = [];    // timestamps ultimi 60s
+let lightningFadeTimer = null;
+let lightningMapInit = false;
 
-function startLightningCounter() {
-  fetchLightningCount();
-  if (lightningTimer) clearInterval(lightningTimer);
-  lightningTimer = setInterval(fetchLightningCount, 30000);
+// Colore per età fulmine (ms)
+function blitzColor(ageMs) {
+  if (ageMs < 30000)  return { color: '#ff2244', r: 6 };
+  if (ageMs < 120000) return { color: '#ff8c00', r: 5 };
+  if (ageMs < 600000) return { color: '#fbbf24', r: 4 };
+  if (ageMs < 1800000) return { color: '#5bc4bb', r: 3 };
+  return { color: '#2a3a55', r: 2 };
 }
 
-async function fetchLightningCount() {
-  try {
-    // API pubblica Blitzortung: ultimo minuto, area Europa/Mondo
-    // Usiamo due endpoint: uno recente (1 min) e uno storico (1h)
-    const [r1m, r60m] = await Promise.allSettled([
-      fetch('https://data.blitzortung.org/Data_1/strikes/1/0.json', {mode:'cors'}),
-      fetch('https://data.blitzortung.org/Data_1/strikes/6/0.json', {mode:'cors'})
-    ]);
+function initLightningMap() {
+  if (lightningMapInit) return;
+  lightningMapInit = true;
 
-    let count10m = '—', count1h = '—', lastStr = '—';
+  const mapEl = document.getElementById('lightning-map');
+  if (!mapEl) return;
 
-    if (r1m.status === 'fulfilled' && r1m.value.ok) {
-      const d = await r1m.value.json();
-      const arr = Array.isArray(d) ? d : (d.strokes || []);
-      count10m = arr.length.toLocaleString('it-IT');
-      if (arr.length > 0) {
-        const last = arr[arr.length - 1];
-        const ts = last.time ? last.time / 1000000 : Date.now();
-        const ago = Math.round((Date.now() - ts) / 1000);
-        lastStr = ago < 60 ? `${ago}s` : `${Math.round(ago/60)}m`;
-      }
-    }
-    if (r60m.status === 'fulfilled' && r60m.value.ok) {
-      const d2 = await r60m.value.json();
-      const arr2 = Array.isArray(d2) ? d2 : (d2.strokes || []);
-      count1h = arr2.length.toLocaleString('it-IT');
-    }
-
-    const el1h  = document.getElementById('blitz-count-1h');
-    const el10m = document.getElementById('blitz-count-10m');
-    const elLast= document.getElementById('blitz-last');
-    if (el1h)  el1h.textContent  = count1h;
-    if (el10m) el10m.textContent = count10m;
-    if (elLast) elLast.textContent = lastStr;
-  } catch(e) {
-    // silenzioso — le statistiche rimangono a —
+  // Forza dimensioni esplicite prima che Leaflet misuri il contenitore
+  const wrap = mapEl.closest('.lightning-wrap');
+  if (wrap) {
+    const h = wrap.offsetHeight || 380;
+    mapEl.style.width  = wrap.offsetWidth  + 'px';
+    mapEl.style.height = h + 'px';
   }
+
+  lightningMap = L.map('lightning-map', {
+    center: [45, 13], zoom: 5,
+    zoomControl: true, attributionControl: false,
+    preferCanvas: true
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png', {
+    maxZoom: 12, opacity: 0.9
+  }).addTo(lightningMap);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png', {
+    maxZoom: 12, opacity: 0.6, zIndex: 500
+  }).addTo(lightningMap);
+
+  // Dopo init, ricalcola dimensioni reali
+  setTimeout(() => {
+    lightningMap.invalidateSize();
+    connectBlitzWS();
+  }, 200);
+}
+
+function connectBlitzWS() {
+  // Blitzortung espone server WebSocket numerati 1–6
+  // Il server 1 copre area Europa, il 3 globale
+  const servers = [
+    'wss://ws1.blitzortung.org/ws',
+    'wss://ws8.blitzortung.org/ws',
+    'wss://ws7.blitzortung.org/ws',
+    'wss://ws3.blitzortung.org/ws',
+  ];
+  let serverIdx = 0;
+
+  function tryConnect() {
+    setBlitzStatus('connecting');
+    const url = servers[serverIdx % servers.length];
+    serverIdx++;
+
+    try {
+      lightningWS = new WebSocket(url);
+    } catch(e) {
+      setTimeout(tryConnect, 5000); return;
+    }
+
+    lightningWS.onopen = () => {
+      lightningWS.send(JSON.stringify({ west: -180, east: 180, north: 90, south: -90 }));
+      setBlitzStatus('live');
+      hideOverlay();
+      // Avvia fade timer ora che la connessione è attiva
+      if (!lightningFadeTimer) {
+        lightningFadeTimer = setInterval(updateLightningColors, 15000);
+      }
+    };
+
+    lightningWS.onmessage = (evt) => {
+      try {
+        const d = JSON.parse(evt.data);
+        // Blitzortung invia: {time, lat, lon, alt, pol, mds, mcg, ...}
+        if (d.lat !== undefined && d.lon !== undefined) {
+          addStrike(d.lat / 1e6, d.lon / 1e6, d.time);
+        }
+        // Alcuni server inviano array di strikes
+        if (Array.isArray(d.strokes)) {
+          d.strokes.forEach(s => addStrike(s.lat / 1e6, s.lon / 1e6, s.time));
+        }
+      } catch(e) { /* ignora frame non-JSON */ }
+    };
+
+    lightningWS.onerror = () => { setBlitzStatus('error'); };
+
+    lightningWS.onclose = () => {
+      setBlitzStatus('reconnecting');
+      setTimeout(tryConnect, 4000);
+    };
+  }
+
+  tryConnect();
+}
+
+function addStrike(lat, lon, timeNs) {
+  if (!lightningMap) return;
+  if (isNaN(lat) || isNaN(lon)) return;
+
+  const now = Date.now();
+  const ts = timeNs ? timeNs / 1e6 : now;   // nanosec → ms
+  const age = now - ts;
+
+  lightningTotal++;
+  lightningLast60.push(now);
+
+  const { color, r } = blitzColor(Math.max(0, age));
+
+  // Cerchio piccolo e luminoso
+  const m = L.circleMarker([lat, lon], {
+    radius: r, color, fillColor: color,
+    fillOpacity: 0.9, weight: 0.5, opacity: 1
+  }).addTo(lightningMap);
+
+  lightningMarkers.push({ marker: m, ts: now });
+
+  // Rimuovi marker più vecchi di 45 minuti (tetto memoria)
+  if (lightningMarkers.length > 3000) {
+    const old = lightningMarkers.shift();
+    if (old.marker) lightningMap.removeLayer(old.marker);
+  }
+
+  // Aggiorna contatori
+  updateLightningStats();
+}
+
+function updateLightningColors() {
+  const now = Date.now();
+  const cutoff = now - 45 * 60 * 1000;
+
+  // Rimuovi i vecchi e aggiorna colori
+  lightningMarkers = lightningMarkers.filter(({ marker, ts }) => {
+    if (ts < cutoff) {
+      lightningMap?.removeLayer(marker);
+      return false;
+    }
+    const age = now - ts;
+    const { color, r } = blitzColor(age);
+    marker.setStyle({ color, fillColor: color, radius: r });
+    return true;
+  });
+
+  updateLightningStats();
+}
+
+function updateLightningStats() {
+  const now = Date.now();
+  // Ultimi 60s
+  lightningLast60 = lightningLast60.filter(t => now - t < 60000);
+
+  const elTotal = document.getElementById('blitz-count-total');
+  const elMin   = document.getElementById('blitz-count-min');
+  if (elTotal) elTotal.textContent = lightningTotal.toLocaleString('it-IT');
+  if (elMin)   elMin.textContent   = lightningLast60.length.toLocaleString('it-IT');
+}
+
+function setBlitzStatus(state) {
+  const el = document.getElementById('blitz-ws-status');
+  if (!el) return;
+  const map = {
+    connecting:   { text: '●', color: '#fbbf24', label: 'Connessione' },
+    live:         { text: '●', color: '#5bc4bb', label: 'Live' },
+    reconnecting: { text: '●', color: '#ff8c00', label: 'Riconnessione' },
+    error:        { text: '●', color: '#e07070', label: 'Errore' },
+  };
+  const s = map[state] || map.error;
+  el.textContent = s.text;
+  el.style.color = s.color;
+  const label = el.parentElement?.querySelector('.lightning-stat-label');
+  if (label) label.textContent = s.label;
+}
+
+function hideOverlay() {
+  const ov = document.getElementById('lightning-overlay');
+  if (ov) { ov.style.transition = 'opacity 0.6s'; ov.style.opacity = '0'; setTimeout(() => ov.remove(), 700); }
+}
+
+function startLightningCounter() {
+  // La mappa viene inizializzata solo quando l'utente apre il tab Temporali
+  // per evitare che Leaflet calcoli dimensioni su un elemento nascosto (display:none)
 }
 
 // ============================================================
