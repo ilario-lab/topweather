@@ -582,6 +582,92 @@
     50%{opacity:1;transform:scale(1.4)}
   }
 
+  /* ── MODELLI PREVISIONALI sub-tabs ── */
+  .model-subtabs {
+    display: flex; gap: 6px;
+    padding: 0 16px 12px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .model-subtabs::-webkit-scrollbar { display: none; }
+  .model-subtab {
+    flex: 0 0 auto; padding: 8px 14px; border-radius: 50px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.2px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--muted); cursor: pointer; white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .model-subtab.active {
+    background: rgba(251,191,36,0.12);
+    border-color: rgba(251,191,36,0.35);
+    color: #fbbf24;
+  }
+  .model-subpanel { display: none; }
+  .model-subpanel.active { display: block; }
+
+  /* ── TEMPORALI / FULMINAZIONI ── */
+  .lightning-wrap {
+    margin: 0 16px 10px;
+    border-radius: 18px; overflow: hidden;
+    border: 1px solid var(--border);
+    position: relative; height: 370px;
+    background: #060e18;
+  }
+  .lightning-wrap iframe { width: 100%; height: 100%; border: none; display: block; }
+  .lightning-legend {
+    margin: 0 16px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 16px;
+  }
+  .lightning-legend-title {
+    font-size: 9.5px; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 10px;
+  }
+  .lightning-legend-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .lightning-dot {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 10.5px; color: var(--muted);
+  }
+  .lightning-dot span {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .lightning-stats {
+    margin: 0 16px 10px;
+    display: grid; grid-template-columns: repeat(3,1fr);
+    gap: 6px;
+  }
+  .lightning-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 10px;
+    text-align: center;
+  }
+  .lightning-stat-val {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px; font-weight: 600; line-height: 1;
+    color: #fbbf24; letter-spacing: -0.5px;
+  }
+  .lightning-stat-label {
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-top: 4px;
+  }
+  .blitz-source {
+    margin: 0 16px 4px;
+    font-size: 10px; color: var(--muted2);
+    text-align: center; padding-bottom: 6px;
+  }
+  .blitz-source a { color: var(--accent); text-decoration: none; }
+  .model-info-card {
+    margin: 0 16px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 16px;
+    font-size: 11.5px; color: var(--muted); line-height: 1.6;
+  }
+  .model-info-card strong { color: var(--text); }
+
   /* ── VENTUSKY & RADAR ── */
   #panel-ventusky { padding: 16px 0 0; }
   .ventusky-wrap {
@@ -660,6 +746,34 @@
     border-color: rgba(91,196,187,0.3);
     color: var(--teal);
   }
+
+  /* ── TERREMOTI SEZIONI ── */
+  .quake-section-title {
+    display: flex; align-items: center; gap: 12px;
+    margin: 16px 16px 10px;
+    padding: 13px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    position: relative;
+  }
+  .quake-section-icon { font-size: 26px; flex-shrink: 0; }
+  .quake-section-label {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.1px;
+  }
+  .quake-section-sub {
+    font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.2px;
+  }
+  .quake-refresh-mini {
+    margin-left: auto; flex-shrink: 0;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 50%; width: 30px; height: 30px;
+    color: var(--muted); font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .quake-refresh-mini:active { background: rgba(255,255,255,0.1); transform: rotate(180deg); }
 
   /* ── TERREMOTI ── */
   .quake-list {
@@ -870,7 +984,7 @@
       <span class="tab-icon">🌿</span><span class="tab-label">Pollini</span>
     </div>
     <div class="tab" data-name="gfs" onclick="switchTab('gfs',this)">
-      <span class="tab-icon">🌐</span><span class="tab-label">GFS 850</span>
+      <span class="tab-icon">🌐</span><span class="tab-label">Modelli</span>
     </div>
     <div class="tab" data-name="metar" onclick="switchTab('metar',this)">
       <span class="tab-icon">✈️</span><span class="tab-label">METAR/TAF</span>
@@ -1049,40 +1163,57 @@ async function renderKpCard() {
 }
 
 // ============================================================
-// TERREMOTI — USGS Earthquake API (gratuita, nessuna chiave)
+// TERREMOTI — Italia (INGV) + Mondo (USGS)
 // ============================================================
-let quakeMap = null;
-let quakeMarkers = [];
-let quakeFilter = '30'; // giorni
-let allQuakes = [];
+
+// Stato separato per le due sezioni
+let quakeMapIT = null, quakeMapWorld = null;
+let quakeMarkersIT = [], quakeMarkersWorld = [];
+let allQuakesIT = [], allQuakesWorld = [];
+let quakeFilterIT = '1';   // default: 24h per Italia (più eventi leggeri)
+let quakeFilterWorld = '7'; // default: 7gg per Mondo (solo M4.5+)
 
 function magClass(m) {
-  if (m < 2.5) return 'mag-minor';
-  if (m < 4.0) return 'mag-light';
+  if (m < 2.0) return 'mag-minor';
+  if (m < 3.5) return 'mag-light';
   if (m < 5.0) return 'mag-moderate';
   if (m < 6.0) return 'mag-strong';
   return 'mag-major';
 }
 function magLabel(m) {
-  if (m < 4.5) return 'Leggero';
-  if (m < 5.5) return 'Moderato';
-  if (m < 6.5) return 'Forte';
-  if (m < 7.5) return '⚠️ Maggiore';
+  if (m < 2.0) return 'Micro';
+  if (m < 3.5) return 'Leggero';
+  if (m < 5.0) return 'Moderato';
+  if (m < 6.0) return 'Forte';
+  if (m < 7.0) return '⚠️ Maggiore';
   return '🚨 Grande';
 }
 function timeAgo(ts) {
   const diff = Date.now() - ts;
-  const m = Math.floor(diff/60000);
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'Adesso';
   if (m < 60) return `${m} min fa`;
-  const h = Math.floor(m/60);
+  const h = Math.floor(m / 60);
   if (h < 24) return `${h}h fa`;
-  return `${Math.floor(h/24)}g fa`;
+  return `${Math.floor(h / 24)}g fa`;
 }
 
-async function fetchQuakes(days) {
+// ── INGV: terremoti Italia in tempo reale ────────────────────
+async function fetchQuakesIT(days) {
+  const end = new Date().toISOString().replace('T',' ').slice(0,19);
+  const start = new Date(Date.now() - days * 86400000).toISOString().replace('T',' ').slice(0,19);
+  const url = `https://webservices.ingv.it/fdsnws/event/1/query?format=geojson`
+    + `&starttime=${encodeURIComponent(start)}&endtime=${encodeURIComponent(end)}`
+    + `&minmagnitude=1.5&orderby=time&limit=80`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Errore INGV');
+  return r.json();
+}
+
+// ── USGS: terremoti mondiali ─────────────────────────────────
+async function fetchQuakesWorld(days) {
   const end = new Date().toISOString();
-  const start = new Date(Date.now() - days*86400000).toISOString();
-  // Terremoti globali
+  const start = new Date(Date.now() - days * 86400000).toISOString();
   const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson`
     + `&starttime=${start}&endtime=${end}`
     + `&minmagnitude=4.5&orderby=time&limit=100`;
@@ -1091,104 +1222,208 @@ async function fetchQuakes(days) {
   return r.json();
 }
 
+// ── Init principale ──────────────────────────────────────────
 async function initQuakes() {
-  await loadQuakes(quakeFilter);
-}
-
-async function loadQuakes(days) {
-  quakeFilter = days;
   const el = document.getElementById('quake-content');
   if (!el) return;
   el.innerHTML = `<div class="loading"><div class="loading-icon">🌀</div><div class="loading-text">Caricamento...</div></div>`;
 
-  // Carica KP e terremoti in parallelo
-  const [kpHTML, quakeResult] = await Promise.allSettled([
+  const [kpResult, itResult, worldResult] = await Promise.allSettled([
     renderKpCard(),
-    fetchQuakes(parseInt(days))
+    fetchQuakesIT(parseInt(quakeFilterIT)),
+    fetchQuakesWorld(parseInt(quakeFilterWorld))
   ]);
 
-  const kp = kpHTML.status === 'fulfilled' ? kpHTML.value : '';
+  const kp = kpResult.status === 'fulfilled' ? kpResult.value : '';
+  allQuakesIT    = itResult.status    === 'fulfilled' ? (itResult.value.features    || []) : [];
+  allQuakesWorld = worldResult.status === 'fulfilled' ? (worldResult.value.features || []) : [];
 
-  try {
-    const data = quakeResult.status === 'fulfilled' ? quakeResult.value : null;
-    if (!data) throw new Error();
-    allQuakes = data.features || [];
-    renderQuakes(allQuakes, days, kp);
-  } catch(e) {
-    el.innerHTML = kp + `<div class="error-msg">⚠️ Impossibile caricare i dati sismici.<br>Controlla la connessione.<br><br><button class="refresh-btn" onclick="loadQuakes('${days}')">Riprova</button></div>`;
-  }
+  renderAllQuakes(kp);
 }
 
-function renderQuakes(quakes, days, kpHTML = '') {
+// ── Ricarica solo Italia ─────────────────────────────────────
+async function reloadIT(days) {
+  quakeFilterIT = days;
+  const sec = document.getElementById('quake-it-list');
+  if (sec) sec.innerHTML = `<div class="loading" style="min-height:80px"><div class="loading-icon" style="font-size:24px">🌀</div></div>`;
+  try {
+    const data = await fetchQuakesIT(parseInt(days));
+    allQuakesIT = data.features || [];
+  } catch(e) { allQuakesIT = []; }
+  updateSectionIT();
+}
+
+// ── Ricarica solo Mondo ──────────────────────────────────────
+async function reloadWorld(days) {
+  quakeFilterWorld = days;
+  const sec = document.getElementById('quake-world-list');
+  if (sec) sec.innerHTML = `<div class="loading" style="min-height:80px"><div class="loading-icon" style="font-size:24px">🌀</div></div>`;
+  try {
+    const data = await fetchQuakesWorld(parseInt(days));
+    allQuakesWorld = data.features || [];
+  } catch(e) { allQuakesWorld = []; }
+  updateSectionWorld();
+}
+
+// ── Render completo ──────────────────────────────────────────
+function renderAllQuakes(kpHTML = '') {
   const el = document.getElementById('quake-content');
   if (!el) return;
 
-  const filters = [
-    {label:'Ultime 24h', val:'1'},
-    {label:'7 giorni',   val:'7'},
-    {label:'30 giorni',  val:'30'},
-  ];
-
-  const listHTML = quakes.length === 0
-    ? `<div class="no-alerts" style="margin:0 20px"><span style="font-size:24px">✅</span><div><div style="font-weight:600">Nessun terremoto rilevato</div><div style="font-size:11px;color:var(--muted)">Nessuna attività sismica significativa (M4.5+) nel periodo selezionato.</div></div></div>`
-    : quakes.map((f,i) => {
-        const p = f.properties;
-        const m = p.mag?.toFixed(1) ?? '?';
-        const depth = f.geometry?.coordinates?.[2]?.toFixed(0) ?? '?';
-        const place = p.place || 'Posizione sconosciuta';
-        return `<div class="quake-row" onclick="zoomQuake(${i})">
-          <div class="quake-mag ${magClass(p.mag)}">${m}</div>
-          <div class="quake-info">
-            <div class="quake-place">${place}</div>
-            <div class="quake-meta">${magLabel(p.mag)} · ${timeAgo(p.time)}</div>
-          </div>
-          <div class="quake-depth">🔻${depth} km</div>
-        </div>`;
-      }).join('');
-
   el.innerHTML = `
     ${kpHTML}
-    <div style="padding:0 16px 6px;font-size:10px;font-weight:600;letter-spacing:2.5px;color:var(--danger);text-transform:uppercase;opacity:0.8">🌍 Terremoti Globali M4.5+</div>
-    <div class="quake-filter-row">
-      ${filters.map(f=>`<div class="quake-filter ${days===f.val?'active':''}" onclick="loadQuakes('${f.val}')">${f.label}</div>`).join('')}
+
+    <!-- ── ITALIA ── -->
+    <div class="quake-section-title">
+      <span class="quake-section-icon">🇮🇹</span>
+      <div>
+        <div class="quake-section-label">Italia — Tempo Reale</div>
+        <div class="quake-section-sub">Fonte: INGV · M1.5+</div>
+      </div>
+      <button class="quake-refresh-mini" onclick="initQuakes()">⟳</button>
     </div>
-    <div class="quake-map-wrap"><div id="quakeMap"></div></div>
-    <div class="quake-list">${listHTML}</div>
-    <div class="last-updated" style="margin-top:16px;padding-bottom:8px">
-      ${quakes.length} eventi · Mondo · M4.5+ · Fonte: USGS
-      <br><button class="refresh-btn" style="margin-top:8px" onclick="loadQuakes('${days}')">⟳ Aggiorna</button>
-    </div>`;
+    <div class="quake-filter-row" id="filter-it">
+      ${[{l:'24 ore',v:'1'},{l:'7 giorni',v:'7'},{l:'30 giorni',v:'30'}]
+        .map(f=>`<div class="quake-filter ${quakeFilterIT===f.v?'active':''}" onclick="reloadIT('${f.v}')">${f.l}</div>`).join('')}
+    </div>
+    <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapIT"></div></div>
+    <div class="quake-list" id="quake-it-list"></div>
+    <div class="last-updated" id="quake-it-footer" style="padding:8px 0 4px"></div>
 
-  // Mappa
-  setTimeout(() => {
-    if (quakeMap) { quakeMap.remove(); quakeMap = null; }
-    quakeMap = L.map('quakeMap', {
-      center: [20, 0], zoom: 2,
-      zoomControl: false, attributionControl: false,
-    });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {maxZoom:18}).addTo(quakeMap);
+    <div style="height:4px"></div>
 
-    // Marker terremoti
-    quakeMarkers = quakes.map(f => {
-      const [lon, lat] = f.geometry.coordinates;
-      const m = f.properties.mag ?? 0;
-      const color = m>=6?'#ff3860':m>=5?'#ff6b6b':m>=4?'#f5a623':m>=2.5?'#a8e063':'#4ecdc4';
-      return L.circleMarker([lat, lon], {
-        radius: Math.max(4, m * 3),
-        color, fillColor: color, fillOpacity: 0.6, weight: 1.5,
-      }).addTo(quakeMap)
-        .bindPopup(`<b>M${m.toFixed(1)}</b><br>${f.properties.place}<br>Prof: ${f.geometry.coordinates[2]?.toFixed(0)} km`);
-    });
-  }, 100);
+    <!-- ── MONDO ── -->
+    <div class="quake-section-title" style="margin-top:4px">
+      <span class="quake-section-icon">🌍</span>
+      <div>
+        <div class="quake-section-label">Mondo — Ultimi Eventi</div>
+        <div class="quake-section-sub">Fonte: USGS · M4.5+</div>
+      </div>
+      <button class="quake-refresh-mini" onclick="initQuakes()">⟳</button>
+    </div>
+    <div class="quake-filter-row" id="filter-world">
+      ${[{l:'24 ore',v:'1'},{l:'7 giorni',v:'7'},{l:'30 giorni',v:'30'}]
+        .map(f=>`<div class="quake-filter ${quakeFilterWorld===f.v?'active':''}" onclick="reloadWorld('${f.v}')">${f.l}</div>`).join('')}
+    </div>
+    <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapWorld"></div></div>
+    <div class="quake-list" id="quake-world-list"></div>
+    <div class="last-updated" id="quake-world-footer" style="padding:8px 0 16px"></div>
+  `;
+
+  updateSectionIT();
+  updateSectionWorld();
 }
 
-function zoomQuake(i) {
-  if (!quakeMap || !allQuakes[i]) return;
-  const [lon, lat] = allQuakes[i].geometry.coordinates;
-  quakeMap.setView([lat, lon], 8, {animate:true});
-  quakeMarkers[i]?.openPopup();
-  // Scroll to map
-  document.querySelector('.quake-map-wrap')?.scrollIntoView({behavior:'smooth', block:'center'});
+// ── Aggiorna sezione Italia (lista + mappa) ──────────────────
+function updateSectionIT() {
+  const listEl   = document.getElementById('quake-it-list');
+  const footerEl = document.getElementById('quake-it-footer');
+  const filterEl = document.getElementById('filter-it');
+
+  if (filterEl) filterEl.innerHTML = [
+    {l:'24 ore',v:'1'},{l:'7 giorni',v:'7'},{l:'30 giorni',v:'30'}
+  ].map(f=>`<div class="quake-filter ${quakeFilterIT===f.v?'active':''}" onclick="reloadIT('${f.v}')">${f.l}</div>`).join('');
+
+  if (listEl) listEl.innerHTML = quakeListHTML(allQuakesIT, 'IT');
+  if (footerEl) footerEl.textContent = `${allQuakesIT.length} eventi · Italia · M1.5+ · INGV`;
+
+  setTimeout(() => {
+    if (quakeMapIT) { quakeMapIT.remove(); quakeMapIT = null; }
+    const mapEl = document.getElementById('quakeMapIT');
+    if (!mapEl) return;
+    quakeMapIT = L.map('quakeMapIT', { center:[42,13], zoom:5, zoomControl:false, attributionControl:false });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:18}).addTo(quakeMapIT);
+    quakeMarkersIT = allQuakesIT.map((f, i) => {
+      const [lon, lat] = f.geometry.coordinates;
+      const m = f.properties.mag ?? 0;
+      const color = quakeColor(m);
+      return L.circleMarker([lat, lon], { radius: Math.max(5, m * 3.5), color, fillColor: color, fillOpacity: 0.7, weight: 1.5 })
+        .addTo(quakeMapIT)
+        .bindPopup(`<b>M${m.toFixed(1)}</b><br>${f.properties.place || ''}<br>Prof: ${f.geometry.coordinates[2]?.toFixed(0)} km`);
+    });
+  }, 120);
+}
+
+// ── Aggiorna sezione Mondo (lista + mappa) ───────────────────
+function updateSectionWorld() {
+  const listEl   = document.getElementById('quake-world-list');
+  const footerEl = document.getElementById('quake-world-footer');
+  const filterEl = document.getElementById('filter-world');
+
+  if (filterEl) filterEl.innerHTML = [
+    {l:'24 ore',v:'1'},{l:'7 giorni',v:'7'},{l:'30 giorni',v:'30'}
+  ].map(f=>`<div class="quake-filter ${quakeFilterWorld===f.v?'active':''}" onclick="reloadWorld('${f.v}')">${f.l}</div>`).join('');
+
+  if (listEl) listEl.innerHTML = quakeListHTML(allQuakesWorld, 'WORLD');
+  if (footerEl) footerEl.textContent = `${allQuakesWorld.length} eventi · Mondo · M4.5+ · USGS`;
+
+  setTimeout(() => {
+    if (quakeMapWorld) { quakeMapWorld.remove(); quakeMapWorld = null; }
+    const mapEl = document.getElementById('quakeMapWorld');
+    if (!mapEl) return;
+    quakeMapWorld = L.map('quakeMapWorld', { center:[20,0], zoom:2, zoomControl:false, attributionControl:false });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:18}).addTo(quakeMapWorld);
+    quakeMarkersWorld = allQuakesWorld.map((f, i) => {
+      const [lon, lat] = f.geometry.coordinates;
+      const m = f.properties.mag ?? 0;
+      const color = quakeColor(m);
+      return L.circleMarker([lat, lon], { radius: Math.max(5, m * 3), color, fillColor: color, fillOpacity: 0.65, weight: 1.5 })
+        .addTo(quakeMapWorld)
+        .bindPopup(`<b>M${m.toFixed(1)}</b><br>${f.properties.place || ''}<br>Prof: ${f.geometry.coordinates[2]?.toFixed(0)} km`);
+    });
+  }, 160);
+}
+
+// ── Helper: colore per magnitudo ─────────────────────────────
+function quakeColor(m) {
+  if (m >= 6)   return '#ff3860';
+  if (m >= 5)   return '#ff6b6b';
+  if (m >= 4)   return '#f5a623';
+  if (m >= 2.5) return '#a8e063';
+  return '#5bc4bb';
+}
+
+// ── Helper: HTML lista terremoti ─────────────────────────────
+function quakeListHTML(quakes, scope) {
+  const zoomFn = scope === 'IT' ? 'zoomQuakeIT' : 'zoomQuakeWorld';
+  if (quakes.length === 0) return `
+    <div class="no-alerts" style="margin:0 16px 8px">
+      <span style="font-size:22px">✅</span>
+      <div><div style="font-weight:600">Nessun evento rilevato</div>
+      <div style="font-size:11px;color:var(--muted)">Nessuna attività sismica nel periodo selezionato.</div></div>
+    </div>`;
+  return quakes.map((f, i) => {
+    const p = f.properties;
+    const m = (p.mag ?? 0).toFixed(1);
+    const depth = f.geometry?.coordinates?.[2]?.toFixed(0) ?? '?';
+    const place = p.place || 'Posizione sconosciuta';
+    return `<div class="quake-row" onclick="${zoomFn}(${i})">
+      <div class="quake-mag ${magClass(p.mag)}">${m}</div>
+      <div class="quake-info">
+        <div class="quake-place">${place}</div>
+        <div class="quake-meta">${magLabel(p.mag)} · ${timeAgo(p.time)}</div>
+      </div>
+      <div class="quake-depth">🔻${depth} km</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Zoom su mappa Italia ─────────────────────────────────────
+function zoomQuakeIT(i) {
+  if (!quakeMapIT || !allQuakesIT[i]) return;
+  const [lon, lat] = allQuakesIT[i].geometry.coordinates;
+  quakeMapIT.setView([lat, lon], 9, { animate: true });
+  quakeMarkersIT[i]?.openPopup();
+  document.getElementById('quakeMapIT')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ── Zoom su mappa Mondo ──────────────────────────────────────
+function zoomQuakeWorld(i) {
+  if (!quakeMapWorld || !allQuakesWorld[i]) return;
+  const [lon, lat] = allQuakesWorld[i].geometry.coordinates;
+  quakeMapWorld.setView([lat, lon], 7, { animate: true });
+  quakeMarkersWorld[i]?.openPopup();
+  document.getElementById('quakeMapWorld')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // ============================================================
@@ -1929,14 +2164,27 @@ function temp850Color(t) {
   return 'rgba(200,0,0,0.70)';
 }
 
+let gfsSubTab = 'gfs850'; // 'gfs850' | 'icon' | 'ecmwf' | 'lightning'
+
 function initGFS() {
   if (gfsInitialized) return;
   gfsInitialized = true;
-  renderGFSShell();
+  renderModelsShell();
   setTimeout(fetchGFSData, 100);
 }
 
-function renderGFSShell() {
+function switchModelSub(name, btn) {
+  gfsSubTab = name;
+  document.querySelectorAll('.model-subtab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.model-subpanel').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const panel = document.getElementById('msub-' + name);
+  if (panel) panel.classList.add('active');
+  // Forza resize mappa se ritorna su GFS
+  if (name === 'gfs850' && gfsMap) setTimeout(() => gfsMap.invalidateSize(), 120);
+}
+
+function renderModelsShell() {
   document.getElementById('gfs-content').innerHTML = `
     <style>
       .gfs-var-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 16px 8px}
@@ -1969,41 +2217,133 @@ function renderGFSShell() {
         justify-content:center;background:rgba(6,14,31,.88);z-index:2000;border-radius:16px;
         gap:8px;color:var(--muted);font-size:12px;text-align:center;padding:16px}
     </style>
-    <div class="gfs-var-row">
-      <button class="gfs-var-btn active" onclick="gfsSetVar('temp',this)">🌡 T 850 hPa</button>
-      <button class="gfs-var-btn" onclick="gfsSetVar('wind',this)">💨 Vento 850 hPa</button>
+
+    <!-- SUB-TABS -->
+    <div class="model-subtabs">
+      <div class="model-subtab active" onclick="switchModelSub('gfs850',this)">🌡 GFS 850 hPa</div>
+      <div class="model-subtab" onclick="switchModelSub('icon',this)">🇩🇪 ICON Europe</div>
+      <div class="model-subtab" onclick="switchModelSub('ecmwf',this)">🌍 ERA5 / ECMWF</div>
+      <div class="model-subtab" onclick="switchModelSub('lightning',this)">⚡ Temporali Live</div>
     </div>
-    <div class="gfs-map-wrap">
-      <div id="gfs-map"></div>
-      <div class="gfs-badge" id="gfs-badge">—</div>
-      <div class="gfs-load" id="gfs-load">
-        <div style="font-size:26px">🌐</div>
-        <div>Scarico dati GFS...</div>
-        <div id="gfs-load-detail" style="font-size:10px;opacity:.6"></div>
+
+    <!-- GFS 850 sub-panel -->
+    <div class="model-subpanel active" id="msub-gfs850">
+      <div class="gfs-var-row">
+        <button class="gfs-var-btn active" onclick="gfsSetVar('temp',this)">🌡 T 850 hPa</button>
+        <button class="gfs-var-btn" onclick="gfsSetVar('wind',this)">💨 Vento 850 hPa</button>
+      </div>
+      <div class="gfs-map-wrap">
+        <div id="gfs-map"></div>
+        <div class="gfs-badge" id="gfs-badge">—</div>
+        <div class="gfs-load" id="gfs-load">
+          <div style="font-size:26px">🌐</div>
+          <div>Scarico dati GFS...</div>
+          <div id="gfs-load-detail" style="font-size:10px;opacity:.6"></div>
+        </div>
+      </div>
+      <div class="gfs-prog-bar"><div id="gfs-prog" class="gfs-prog-fill" style="width:0%"></div></div>
+      <div class="gfs-controls">
+        <button class="gfs-play" id="gfs-playbtn" onclick="toggleGFSPlay()">▶</button>
+        <input type="range" class="gfs-slider" id="gfs-slider" min="0" max="0" value="0" oninput="gfsSeek(this.value)">
+        <span class="gfs-lbl" id="gfs-lbl">—</span>
+      </div>
+      <div class="gfs-spd-row">
+        <button class="gfs-spd" onclick="gfsSetSpd(1400,this)">🐢 Lento</button>
+        <button class="gfs-spd active" onclick="gfsSetSpd(700,this)">▶ Norm.</button>
+        <button class="gfs-spd" onclick="gfsSetSpd(200,this)">⚡ Rapido</button>
+      </div>
+      <div class="gfs-legend" id="gfs-legend">
+        <span class="gfs-leg-lbl">-20°C</span>
+        <div class="gfs-leg-bar"></div>
+        <span class="gfs-leg-lbl">+30°C</span>
+      </div>
+      <div class="model-info-card">
+        <strong>GFS (Global Forecast System)</strong> — modello globale NOAA/NCEP aggiornato ogni 6h. 
+        Qui visualizzi temperatura e vento al livello di pressione <strong>850 hPa</strong> (~1500 m di quota), 
+        indicatore chiave per identificare masse d'aria fredda, calde o perturbazioni in quota. 
+        Dati via <strong>Open-Meteo</strong>, previsione a 5 giorni ogni 3h.
       </div>
     </div>
-    <div class="gfs-prog-bar"><div id="gfs-prog" class="gfs-prog-fill" style="width:0%"></div></div>
-    <div class="gfs-controls">
-      <button class="gfs-play" id="gfs-playbtn" onclick="toggleGFSPlay()">▶</button>
-      <input type="range" class="gfs-slider" id="gfs-slider" min="0" max="0" value="0" oninput="gfsSeek(this.value)">
-      <span class="gfs-lbl" id="gfs-lbl">—</span>
+
+    <!-- ICON Europe sub-panel -->
+    <div class="model-subpanel" id="msub-icon">
+      <div class="ventusky-wrap" style="height:420px;margin:0 16px 10px">
+        <iframe src="https://embed.windy.com/embed2.html?lat=41.9&lon=12.5&detailLat=41.9&detailLon=12.5&width=650&height=420&zoom=5&level=850h&overlay=temp&product=icon&menu=&message=true&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1"
+          allowfullscreen loading="lazy"></iframe>
+      </div>
+      <div class="model-info-card">
+        <strong>ICON-EU (Icosahedral Nonhydrostatic)</strong> — modello ad alta risoluzione del <strong>DWD (Servizio Meteorologico Tedesco)</strong>, 
+        specializzato sull'Europa con passo di griglia ~6.5 km. Aggiornato ogni 3h. 
+        Particolarmente accurato per precipitazioni, fronti e fenomeni locali sull'area mediterranea.
+        Visualizzazione via <strong>Windy</strong>.
+      </div>
     </div>
-    <div class="gfs-spd-row">
-      <button class="gfs-spd" onclick="gfsSetSpd(1400,this)">🐢 Lento</button>
-      <button class="gfs-spd active" onclick="gfsSetSpd(700,this)">▶ Norm.</button>
-      <button class="gfs-spd" onclick="gfsSetSpd(200,this)">⚡ Rapido</button>
+
+    <!-- ERA5 / ECMWF sub-panel -->
+    <div class="model-subpanel" id="msub-ecmwf">
+      <div class="ventusky-wrap" style="height:420px;margin:0 16px 10px">
+        <iframe src="https://embed.windy.com/embed2.html?lat=41.9&lon=12.5&detailLat=41.9&detailLon=12.5&width=650&height=420&zoom=5&level=850h&overlay=temp&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1"
+          allowfullscreen loading="lazy"></iframe>
+      </div>
+      <div class="model-info-card">
+        <strong>ECMWF (IFS — Integrated Forecasting System)</strong> — considerato il modello globale 
+        più accurato al mondo. Prodotto dal <strong>Centro Europeo per le Previsioni Meteo a Medio Termine</strong>, 
+        con risoluzione ~9 km e previsioni fino a 15 giorni. Aggiornato ogni 12h. 
+        Eccellente per la previsione di perturbazioni atlantiche sul Mediterraneo.
+        Visualizzazione via <strong>Windy</strong>.
+      </div>
     </div>
-    <div class="gfs-legend" id="gfs-legend">
-      <span class="gfs-leg-lbl">-20°C</span>
-      <div class="gfs-leg-bar"></div>
-      <span class="gfs-leg-lbl">+30°C</span>
+
+    <!-- TEMPORALI LIVE sub-panel -->
+    <div class="model-subpanel" id="msub-lightning">
+      <div class="lightning-stats" id="lightning-stats">
+        <div class="lightning-stat">
+          <div class="lightning-stat-val" id="blitz-count-1h">—</div>
+          <div class="lightning-stat-label">Fulmini / 1h</div>
+        </div>
+        <div class="lightning-stat">
+          <div class="lightning-stat-val" id="blitz-count-10m">—</div>
+          <div class="lightning-stat-label">/ 10 min</div>
+        </div>
+        <div class="lightning-stat">
+          <div class="lightning-stat-val" id="blitz-last">—</div>
+          <div class="lightning-stat-label">Ultimo</div>
+        </div>
+      </div>
+      <div class="lightning-wrap">
+        <iframe
+          src="https://www.blitzortung.org/en/live_lightning_maps.php?map=11"
+          allowfullscreen loading="lazy"
+          sandbox="allow-scripts allow-same-origin allow-popups">
+        </iframe>
+      </div>
+      <div class="lightning-legend">
+        <div class="lightning-legend-title">⚡ Legenda fulminazioni</div>
+        <div class="lightning-legend-row">
+          <div class="lightning-dot"><span style="background:#ff3860"></span>< 5 min fa</div>
+          <div class="lightning-dot"><span style="background:#ff8c00"></span>5–15 min</div>
+          <div class="lightning-dot"><span style="background:#fbbf24"></span>15–30 min</div>
+          <div class="lightning-dot"><span style="background:#5bc4bb"></span>30–60 min</div>
+          <div class="lightning-dot"><span style="background:#44547a"></span>> 1 ora</div>
+        </div>
+      </div>
+      <div class="model-info-card">
+        <strong>Blitzortung.org</strong> — rete globale di rilevamento fulmini in tempo reale basata su 
+        oltre <strong>2000 stazioni private</strong> di ascolto VLF/LF distribuite in tutto il mondo. 
+        Latenza media di rilevamento: <strong>2–5 secondi</strong>. 
+        Ogni punto sulla mappa rappresenta un impatto al suolo (CG) o una scarica in quota (IC) 
+        rilevata triangolando i segnali di almeno 5 stazioni.
+      </div>
+      <div class="blitz-source">Dati: <a href="https://www.blitzortung.org" target="_blank">Blitzortung.org</a> — licenza open data CC BY-NC-SA</div>
     </div>
-    <p class="gfs-info">Dati GFS/ICON 850 hPa · Open-Meteo · 5 giorni · ogni 3h</p>
   `;
-  // Init map
+
+  // Init mappa GFS
   setTimeout(() => {
     gfsMap = L.map('gfs-map', { center:[39.0,15.5], zoom:5, zoomControl:true, attributionControl:false });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:10}).addTo(gfsMap);
+    // Avvia polling contatore fulmini
+    startLightningCounter();
   }, 80);
 }
 
@@ -2153,8 +2493,57 @@ function gfsSetVar(v,btn) {
   if(gfsDataGrid.length) gfsDrawFrame(gfsFrameIndex);
 }
 
+// ── Lightning counter (Blitzortung public JSON) ──────────────
+let lightningTimer = null;
+let lightningHistory = [];
+let lightningCount1h = 0;
+
+function startLightningCounter() {
+  fetchLightningCount();
+  if (lightningTimer) clearInterval(lightningTimer);
+  lightningTimer = setInterval(fetchLightningCount, 30000);
+}
+
+async function fetchLightningCount() {
+  try {
+    // API pubblica Blitzortung: ultimo minuto, area Europa/Mondo
+    // Usiamo due endpoint: uno recente (1 min) e uno storico (1h)
+    const [r1m, r60m] = await Promise.allSettled([
+      fetch('https://data.blitzortung.org/Data_1/strikes/1/0.json', {mode:'cors'}),
+      fetch('https://data.blitzortung.org/Data_1/strikes/6/0.json', {mode:'cors'})
+    ]);
+
+    let count10m = '—', count1h = '—', lastStr = '—';
+
+    if (r1m.status === 'fulfilled' && r1m.value.ok) {
+      const d = await r1m.value.json();
+      const arr = Array.isArray(d) ? d : (d.strokes || []);
+      count10m = arr.length.toLocaleString('it-IT');
+      if (arr.length > 0) {
+        const last = arr[arr.length - 1];
+        const ts = last.time ? last.time / 1000000 : Date.now();
+        const ago = Math.round((Date.now() - ts) / 1000);
+        lastStr = ago < 60 ? `${ago}s` : `${Math.round(ago/60)}m`;
+      }
+    }
+    if (r60m.status === 'fulfilled' && r60m.value.ok) {
+      const d2 = await r60m.value.json();
+      const arr2 = Array.isArray(d2) ? d2 : (d2.strokes || []);
+      count1h = arr2.length.toLocaleString('it-IT');
+    }
+
+    const el1h  = document.getElementById('blitz-count-1h');
+    const el10m = document.getElementById('blitz-count-10m');
+    const elLast= document.getElementById('blitz-last');
+    if (el1h)  el1h.textContent  = count1h;
+    if (el10m) el10m.textContent = count10m;
+    if (elLast) elLast.textContent = lastStr;
+  } catch(e) {
+    // silenzioso — le statistiche rimangono a —
+  }
+}
+
 // ============================================================
-// METAR / TAF — API aviationweather.gov (NOAA, gratuita)
 // ============================================================
 let metarInitialized = false;
 let metarStationId = 'LICR'; // Reggio Calabria default
