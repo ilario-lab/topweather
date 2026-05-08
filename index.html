@@ -218,8 +218,8 @@
 
   .tab[data-name="radar"].active  { background: rgba(91,196,187,0.1); border-color: rgba(91,196,187,0.3); color: var(--teal); }
   .tab[data-name="radar"].active::after { background: linear-gradient(90deg, transparent, var(--teal), transparent); }
-  .tab[data-name="ventusky"].active { background: rgba(126,184,232,0.1); border-color: rgba(126,184,232,0.3); color: var(--accent2); }
-  .tab[data-name="ventusky"].active::after { background: linear-gradient(90deg, transparent, var(--accent2), transparent); }
+  .tab[data-name="ventusky"].active { background: rgba(160,130,255,0.1); border-color: rgba(160,130,255,0.3); color: #a082ff; }
+  .tab[data-name="ventusky"].active::after { background: linear-gradient(90deg, transparent, #a082ff, transparent); }
   .tab[data-name="terremoti"].active { background: rgba(224,112,112,0.1); border-color: rgba(224,112,112,0.3); color: var(--danger); }
   .tab[data-name="terremoti"].active::after { background: linear-gradient(90deg, transparent, var(--danger), transparent); }
   .tab[data-name="mare"].active { background: rgba(110,203,168,0.1); border-color: rgba(110,203,168,0.3); color: var(--accent3); }
@@ -581,6 +581,123 @@
     0%,100%{opacity:0.25;transform:scale(1)}
     50%{opacity:1;transform:scale(1.4)}
   }
+
+  /* ── ASTRONOMIA ── */
+  .astro-subtabs {
+    display: flex; gap: 6px;
+    padding: 0 16px 14px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .astro-subtabs::-webkit-scrollbar { display: none; }
+  .astro-subtab {
+    flex: 0 0 auto; padding: 8px 14px; border-radius: 50px;
+    font-size: 11px; font-weight: 600;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--muted); cursor: pointer; white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .astro-subtab.active {
+    background: rgba(160,130,255,0.12);
+    border-color: rgba(160,130,255,0.35);
+    color: #a082ff;
+  }
+  .astro-subpanel { display: none; }
+  .astro-subpanel.active { display: block; }
+  .astro-card {
+    margin: 0 16px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px; padding: 16px 16px;
+    position: relative; overflow: hidden;
+  }
+  .astro-card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 80% -10%, rgba(160,130,255,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .astro-card-title {
+    font-size: 9.5px; font-weight: 600;
+    letter-spacing: 2.5px; text-transform: uppercase;
+    color: #a082ff; opacity: 0.85; margin-bottom: 12px;
+  }
+  .astro-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .astro-icon { font-size: 22px; width: 28px; text-align: center; flex-shrink: 0; }
+  .astro-label { font-size: 11px; color: var(--muted); }
+  .astro-value { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
+  .astro-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .astro-timeline {
+    position: relative; height: 24px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px; margin: 10px 0 4px; overflow: hidden;
+  }
+  .astro-daybar {
+    position: absolute; top: 0; height: 100%;
+    background: linear-gradient(90deg, #f5a623, #ffe082, #f5a623);
+    border-radius: 12px; opacity: 0.3;
+  }
+  .astro-now-tick {
+    position: absolute; top: 0; width: 2px; height: 100%;
+    background: rgba(255,255,255,0.8); border-radius: 1px;
+  }
+  .astro-tl-label {
+    display: flex; justify-content: space-between;
+    font-size: 8.5px; color: var(--muted2);
+  }
+  .astro-7day {
+    display: grid; grid-template-columns: repeat(3,1fr);
+    gap: 7px; margin: 0 16px 10px;
+  }
+  .astro-day-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 10px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .planet-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; margin: 0 16px 10px;
+  }
+  .planet-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 14px 12px; text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .planet-card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% -20%, rgba(160,130,255,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .planet-icon { font-size: 28px; margin-bottom: 6px; }
+  .planet-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .planet-detail { font-size: 10px; color: var(--muted); line-height: 1.4; }
+  .planet-visible {
+    display: inline-block; margin-top: 6px;
+    font-size: 9.5px; font-weight: 600; padding: 3px 8px;
+    border-radius: 50px;
+  }
+  .p-vis  { background: rgba(91,196,187,0.15); color: var(--teal); border: 1px solid rgba(91,196,187,0.25); }
+  .p-inv  { background: rgba(100,100,100,0.12); color: var(--muted); border: 1px solid rgba(100,100,100,0.2); }
+  .p-dawn { background: rgba(245,166,35,0.15);  color: var(--accent); border: 1px solid rgba(245,166,35,0.25); }
+  .moon-bar-wrap { height: 6px; background: rgba(255,255,255,0.07); border-radius: 3px; margin-top: 5px; overflow: hidden; }
+  .moon-bar { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #a0a0c0, #e8e8ff); }
+  .iss-card {
+    margin: 0 16px 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 18px; padding: 16px;
+    position: relative; overflow: hidden;
+  }
+  .iss-stat-grid {
+    display: grid; grid-template-columns: repeat(3,1fr);
+    gap: 8px; margin-top: 12px;
+  }
+  .iss-stat {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 8px; text-align: center;
+  }
+  .iss-stat-val { font-size: 16px; font-weight: 600; color: #a082ff; letter-spacing: -0.3px; }
+  .iss-stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
 
   /* ── MODELLI PREVISIONALI sub-tabs ── */
   .model-subtabs {
@@ -972,7 +1089,7 @@
       <span class="tab-icon">📡</span><span class="tab-label">Radar</span>
     </div>
     <div class="tab" data-name="ventusky" onclick="switchTab('ventusky',this)">
-      <span class="tab-icon">🌀</span><span class="tab-label">Ventusky</span>
+      <span class="tab-icon">🔭</span><span class="tab-label">Astronomia</span>
     </div>
     <div class="tab" data-name="terremoti" onclick="switchTab('terremoti',this)">
       <span class="tab-icon">🌍</span><span class="tab-label">Sismi & Kp</span>
@@ -1039,6 +1156,7 @@ function switchTab(name, el) {
   if (name === 'terremoti') initQuakes();
   if (name === 'gfs') initGFS();
   if (name === 'metar') initMetar();
+  if (name === 'ventusky') initAstro();
   if (name === 'effemeridi') initEffemeridi();
 }
 
@@ -1539,7 +1657,8 @@ async function doSearch() {
 function selectCity(lat, lon, name, region) {
   currentLat=lat; currentLon=lon; currentCity=name; currentRegion=region;
   document.getElementById('searchInput').value='';
-  effInitialized = false; // ricalcola effemeridi per nuova città
+  astroInitialized = false; // ricalcola astronomia per nuova città
+  effInitialized = false;
   hideSuggestions(); updateHeader(); load();
 }
 
@@ -1905,11 +2024,8 @@ function render(weatherData, marineData, pollenData) {
       <button class="refresh-btn" onclick="load()">⟳ &nbsp;Aggiorna</button>
     </div>
     <div id="panel-ventusky" class="tab-panel ${activeTab==='ventusky'?'active':''}">
-      <div class="ventusky-wrap">
-        <iframe src="https://www.ventusky.com/?p=${currentLat};${currentLon};6&l=rain-3h" allowfullscreen loading="lazy" title="Ventusky Weather Map"></iframe>
-      </div>
-      <div class="ventusky-note"><strong>🌀 Ventusky</strong> — mappa meteorologica interattiva per studio e analisi.<br>Usa i controlli interni per cambiare layer: vento, precipitazioni, temperatura, pressione e molto altro.</div>
-      <div class="last-updated" style="margin-top:10px">© Ventusky.com · Solo per uso personale/studio</div>
+      <div style="height:14px"></div>
+      <div id="astro-content"><div class="loading"><div class="loading-icon">🔭</div><div class="loading-text">Caricamento astronomia...</div></div></div>
     </div>
     <div id="panel-terremoti" class="tab-panel ${activeTab==='terremoti'?'active':''}">
       <div style="height:14px"></div>
@@ -2236,6 +2352,7 @@ function renderModelsShell() {
       <div class="model-subtab active" onclick="switchModelSub('gfs850',this)">🌡 GFS 850 hPa</div>
       <div class="model-subtab" onclick="switchModelSub('icon',this)">🇩🇪 ICON Europe</div>
       <div class="model-subtab" onclick="switchModelSub('ecmwf',this)">🌍 ERA5 / ECMWF</div>
+      <div class="model-subtab" onclick="switchModelSub('ventusky',this)">🌀 Ventusky</div>
       <div class="model-subtab" onclick="switchModelSub('lightning',this)">⚡ Temporali Live</div>
     </div>
 
@@ -2304,6 +2421,20 @@ function renderModelsShell() {
         con risoluzione ~9 km e previsioni fino a 15 giorni. Aggiornato ogni 12h. 
         Eccellente per la previsione di perturbazioni atlantiche sul Mediterraneo.
         Visualizzazione via <strong>Windy</strong>.
+      </div>
+    </div>
+
+    <!-- VENTUSKY sub-panel -->
+    <div class="model-subpanel" id="msub-ventusky">
+      <div class="ventusky-wrap" style="height:440px;margin:0 16px 10px">
+        <iframe id="ventusky-iframe-model"
+          src="https://www.ventusky.com/?p=41.9;12.5;6&l=rain-3h"
+          allowfullscreen loading="lazy" title="Ventusky Weather Map"></iframe>
+      </div>
+      <div class="model-info-card">
+        <strong>🌀 Ventusky</strong> — mappa meteorologica interattiva multi-modello (GFS, ICON, ECMWF). 
+        Usa i controlli interni per cambiare layer: vento, precipitazioni, temperatura, pressione, umidità, neve e molto altro. 
+        Puoi animare la previsione avanzando nel tempo con il cursore temporale integrato.
       </div>
     </div>
 
@@ -3316,13 +3447,532 @@ function renderGpsSat(constellations, allSats, pos, now) {
 // ============================================================
 // EFFEMERIDI — Calcolo astronomico locale (nessuna API)
 // ============================================================
-let effInitialized = false;
+// effInitialized dichiarato in fondo al file
 
-function initEffemeridi() {
-  if (effInitialized) return;
-  effInitialized = true;
-  renderEffemeridi();
+// ============================================================
+// ASTRONOMIA — Sole, Luna, Pianeti, ISS
+// ============================================================
+let astroInitialized = false;
+let astroSubTab = 'sole';
+
+function initAstro() {
+  if (astroInitialized) return;
+  astroInitialized = true;
+  renderAstroShell();
 }
+
+function switchAstroSub(name, btn) {
+  astroSubTab = name;
+  document.querySelectorAll('.astro-subtab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.astro-subpanel').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const panel = document.getElementById('asub-' + name);
+  if (panel) panel.classList.add('active');
+
+  if (name === 'iss') {
+    if (issTimer) clearTimeout(issTimer);
+    fetchISSPosition(currentLat, currentLon);
+  }
+  if (name === 'voyager') {
+    renderVoyagerLive();
+  }
+}
+
+function renderAstroShell() {
+  const el = document.getElementById('astro-content');
+  if (!el) return;
+
+  const lat = currentLat || 38.11;
+  const lon = currentLon || 15.66;
+  const today = new Date();
+
+  // Precalcola dati astronomici
+  const sunData = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    d.setHours(12,0,0,0);
+    sunData.push({ d, sun: sunTimes(lat, lon, d), moon: moonPhase(d) });
+  }
+  const main = sunData[0];
+  const [stagione, solstizio] = season(today, lat);
+
+  el.innerHTML = `
+    <div class="astro-subtabs">
+      <div class="astro-subtab active" onclick="switchAstroSub('sole',this)">☀️ Sole & Giorno</div>
+      <div class="astro-subtab" onclick="switchAstroSub('luna',this)">🌙 Luna</div>
+      <div class="astro-subtab" onclick="switchAstroSub('pianeti',this)">🪐 Pianeti</div>
+      <div class="astro-subtab" onclick="switchAstroSub('iss',this)">🛸 ISS</div>
+      <div class="astro-subtab" onclick="switchAstroSub('voyager',this)">🚀 Voyager</div>
+    </div>
+
+    <!-- SOLE -->
+    <div class="astro-subpanel active" id="asub-sole">
+      ${renderSolePanel(main, sunData, today, lat, lon, stagione, solstizio)}
+    </div>
+
+    <!-- LUNA -->
+    <div class="astro-subpanel" id="asub-luna">
+      ${renderLunaPanel(main, sunData, today, lat, lon)}
+    </div>
+
+    <!-- PIANETI -->
+    <div class="astro-subpanel" id="asub-pianeti">
+      ${renderPianetiPanel(today, lat, lon)}
+    </div>
+
+    <!-- ISS -->
+    <div class="astro-subpanel" id="asub-iss">
+      ${renderISSPanel(lat, lon)}
+    </div>
+
+    <!-- VOYAGER -->
+    <div class="astro-subpanel" id="asub-voyager">
+      ${renderVoyagerPanel()}
+    </div>
+  `;
+
+  // Fetch ISS position live
+  fetchISSPosition(lat, lon);
+}
+
+// ── Pannello Sole ────────────────────────────────────────────
+function renderSolePanel(main, sunData, today, lat, lon, stagione, solstizio) {
+  const s = main.sun;
+  const timeBar = s ? (() => {
+    const midnight = new Date(today); midnight.setHours(0,0,0,0);
+    const dayMs = 86400000;
+    const rPct = ((s.dawn  - midnight) / dayMs * 100).toFixed(1);
+    const sPct = ((s.dusk  - midnight) / dayMs * 100).toFixed(1);
+    const w   = (sPct - rPct).toFixed(1);
+    const now = ((today - midnight) / dayMs * 100).toFixed(1);
+    return `<div class="astro-daybar" style="left:${rPct}%;width:${w}%"></div>
+            <div class="astro-now-tick" style="left:${now}%"></div>`;
+  })() : '';
+
+  const dayCards = sunData.slice(1).map(({d, sun, moon}) => {
+    if (!sun) return '';
+    const dn = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][d.getDay()];
+    return `<div class="astro-day-card">
+      <div style="font-size:11px;font-weight:700;color:var(--text)">${dn} ${d.getDate()}</div>
+      <div style="font-size:10px;color:var(--muted)">🌅 ${fmt(sun.rise)}</div>
+      <div style="font-size:10px;color:var(--muted)">🌇 ${fmt(sun.set)}</div>
+      <div style="font-size:10px;color:var(--muted)">${moon.icon} ${fmtDur(sun.dayLen)}</div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="astro-card">
+      <div class="astro-card-title">☀️ Sole — ${today.toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'})}</div>
+      ${s ? `
+        <div class="astro-timeline">${timeBar}</div>
+        <div class="astro-tl-label"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+        <div style="height:10px"></div>
+        <div class="astro-row">
+          <div class="astro-icon">🌅</div>
+          <div><div class="astro-label">Alba</div><div class="astro-value">${fmt(s.rise)}</div></div>
+          <div style="margin-left:auto;text-align:right"><div class="astro-label">Crepuscolo civile</div><div class="astro-sub">${fmt(s.dawn)}</div></div>
+        </div>
+        <div class="astro-row">
+          <div class="astro-icon">🌞</div>
+          <div><div class="astro-label">Mezzogiorno solare</div><div class="astro-value">${fmt(s.transit)}</div></div>
+          <div style="margin-left:auto;text-align:right"><div class="astro-label">Elevazione massima</div><div class="astro-sub">${s.elevation}°</div></div>
+        </div>
+        <div class="astro-row">
+          <div class="astro-icon">🌇</div>
+          <div><div class="astro-label">Tramonto</div><div class="astro-value">${fmt(s.set)}</div></div>
+          <div style="margin-left:auto;text-align:right"><div class="astro-label">Crepuscolo serale</div><div class="astro-sub">${fmt(s.dusk)}</div></div>
+        </div>
+        <div class="astro-row">
+          <div class="astro-icon">⏱</div>
+          <div><div class="astro-label">Durata del giorno</div><div class="astro-value">${fmtDur(s.dayLen)}</div></div>
+          <div style="margin-left:auto;text-align:right"><div class="astro-label">Declinazione</div><div class="astro-sub">${s.decl}°</div></div>
+        </div>
+      ` : '<div style="color:var(--muted);font-size:12px">Dati non disponibili.</div>'}
+    </div>
+    <div class="astro-card">
+      <div class="astro-card-title">🗓 Stagione Astronomica</div>
+      <div class="astro-row">
+        <div style="font-size:30px">${stagione.split(' ')[0]}</div>
+        <div>
+          <div class="astro-value">${stagione.split(' ').slice(1).join(' ')}</div>
+          <div class="astro-sub">Inizio astronomico: ${solstizio}</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 16px 8px;font-size:9.5px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#a082ff;opacity:0.8">Prossimi 6 giorni</div>
+    <div class="astro-7day">${dayCards}</div>
+    <div class="last-updated" style="padding:4px 0 12px">Calcolo locale · Algoritmo NOAA / Jean Meeus</div>
+  `;
+}
+
+// ── Pannello Luna ────────────────────────────────────────────
+function renderLunaPanel(main, sunData, today) {
+  const moon = main.moon;
+  const illum = Math.round((moon.pct < 0.5 ? moon.pct * 2 : (1 - moon.pct) * 2) * 100);
+
+  const prossimeFasi = [
+    ['🌑','Luna Nuova', 0],
+    ['🌓','Primo Quarto', 7.38],
+    ['🌕','Luna Piena', 14.77],
+    ['🌗','Ultimo Quarto', 22.15],
+  ].map(([ic, nm, day]) => {
+    const diff = ((day - moon.phase) + 29.53) % 29.53;
+    const d2 = new Date(today);
+    d2.setDate(today.getDate() + Math.round(diff));
+    const giorniMancanti = Math.round(diff);
+    return `<div style="text-align:center;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:12px;padding:10px 4px">
+      <div style="font-size:24px">${ic}</div>
+      <div style="font-size:9.5px;color:var(--muted);margin-top:3px">${nm}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:2px">${d2.getDate()} ${['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'][d2.getMonth()]}</div>
+      <div style="font-size:9px;color:var(--muted)">${giorniMancanti === 0 ? 'Oggi' : `fra ${giorniMancanti}g`}</div>
+    </div>`;
+  }).join('');
+
+  // Calendario fasi mese corrente
+  const mesiCals = sunData.map(({d, moon:m}) => {
+    const dn = ['D','L','M','M','G','V','S'][d.getDay()];
+    return `<div style="text-align:center">
+      <div style="font-size:14px">${m.icon}</div>
+      <div style="font-size:9px;color:var(--muted)">${dn} ${d.getDate()}</div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="astro-card">
+      <div class="astro-card-title">🌙 Fase Lunare Attuale</div>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+        <div style="font-size:64px;line-height:1;filter:drop-shadow(0 0 18px rgba(200,200,255,0.3))">${moon.icon}</div>
+        <div style="flex:1">
+          <div style="font-size:18px;font-weight:700;color:var(--text)">${moon.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Illuminazione ${illum}%</div>
+          <div class="moon-bar-wrap"><div class="moon-bar" style="width:${illum}%"></div></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:5px">Giorno ${moon.phase.toFixed(1)} di 29.5 nel ciclo sinodico</div>
+        </div>
+      </div>
+    </div>
+    <div class="astro-card">
+      <div class="astro-card-title">📅 Prossime Fasi Principali</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${prossimeFasi}</div>
+    </div>
+    <div class="astro-card">
+      <div class="astro-card-title">🗓 Fasi Prossimi 7 Giorni</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${mesiCals}</div>
+    </div>
+    <div class="last-updated" style="padding:4px 0 12px">Algoritmo Jean Meeus · Ephemeris 2000</div>
+  `;
+}
+
+// ── Pannello Pianeti ─────────────────────────────────────────
+function renderPianetiPanel(today, lat, lon) {
+  // Calcolo approssimativo visibilità pianeti (algoritmo Jean Meeus semplificato)
+  const JD = toJulian(today);
+  const T = (JD - 2451545.0) / 36525.0;
+
+  const planets = [
+    { name: 'Mercurio', icon: '☿', ...mercuryVis(T, today, lat) },
+    { name: 'Venere',   icon: '♀', ...venusVis(T, today, lat) },
+    { name: 'Marte',    icon: '♂', ...marsVis(T, today, lat) },
+    { name: 'Giove',    icon: '♃', ...jupiterVis(T, today, lat) },
+    { name: 'Saturno',  icon: '♄', ...saturnVis(T, today, lat) },
+    { name: 'Urano',    icon: '⛢', ...uranusVis(T, today, lat) },
+  ];
+
+  const cards = planets.map(p => {
+    const visCls = p.visible === 'sera' ? 'p-vis' : p.visible === 'mattina' ? 'p-dawn' : 'p-inv';
+    const visLbl = p.visible === 'sera' ? '🌆 Visibile sera' : p.visible === 'mattina' ? '🌄 Visibile mattina' : '● Non visibile';
+    return `<div class="planet-card">
+      <div class="planet-icon">${p.icon}</div>
+      <div class="planet-name">${p.name}</div>
+      <div class="planet-detail">${p.info}</div>
+      <div class="planet-visible ${visCls}">${visLbl}</div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="astro-card" style="margin-bottom:10px">
+      <div class="astro-card-title">🪐 Pianeti del Sistema Solare</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5">
+        Visibilità calcolata per <strong style="color:var(--text)">${currentCity}</strong> — 
+        ${today.toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'})}
+      </div>
+    </div>
+    <div class="planet-grid">${cards}</div>
+    <div class="last-updated" style="padding:4px 0 12px">Calcolo orbitale approssimativo · Jean Meeus cap. 33–36</div>
+  `;
+}
+
+// ── Pannello ISS ─────────────────────────────────────────────
+function renderISSPanel(lat, lon) {
+  return `
+    <div class="iss-card">
+      <div class="astro-card-title" style="color:#a082ff">🛸 Stazione Spaziale Internazionale</div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+        <div style="font-size:48px;filter:drop-shadow(0 0 16px rgba(160,130,255,0.5))">🛸</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--text)">Posizione in tempo reale</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Orbita a ~408 km · 28.000 km/h · 15.5 orbite/giorno</div>
+        </div>
+      </div>
+      <div class="iss-stat-grid">
+        <div class="iss-stat"><div class="iss-stat-val" id="iss-lat">—</div><div class="iss-stat-label">Latitudine</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" id="iss-lon">—</div><div class="iss-stat-label">Longitudine</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" id="iss-alt">—</div><div class="iss-stat-label">Quota (km)</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" id="iss-vel">—</div><div class="iss-stat-label">Velocità km/h</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" id="iss-vis">—</div><div class="iss-stat-label">Visibilità</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" id="iss-dist" style="font-size:13px">—</div><div class="iss-stat-label">Da te (km)</div></div>
+      </div>
+      <div id="iss-status" style="margin-top:10px;background:rgba(160,130,255,0.07);border:1px solid rgba(160,130,255,0.18);border-radius:12px;padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">
+        Connessione in corso...
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5">
+        💡 <strong style="color:var(--text)">Quando osservarla?</strong> È visibile ad occhio nudo come un punto luminoso che attraversa il cielo in ~6 minuti, nelle ore serali/mattutine quando il cielo è buio ma l'ISS è ancora illuminata dal sole.
+      </div>
+    </div>
+    <div class="last-updated" style="padding:4px 0 12px">Fonte: wheretheiss.at · Aggiornamento ogni 5s</div>
+  `;
+}
+
+// ── ISS Live Position — wheretheiss.at (CORS aperto) ─────────
+let issTimer = null;
+async function fetchISSPosition(userLat, userLon) {
+  const elStatus = document.getElementById('iss-status');
+  try {
+    const r = await fetch('https://api.wheretheiss.at/v1/satellites/25544');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+
+    const issLat  = parseFloat(d.latitude);
+    const issLon  = parseFloat(d.longitude);
+    const issAlt  = parseFloat(d.altitude).toFixed(0);
+    const issVel  = Math.round(parseFloat(d.velocity)).toLocaleString('it-IT');
+    const issVis  = d.visibility === 'daylight' ? '☀️ Giorno' : '🌙 Notte';
+
+    const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+    set('iss-lat', issLat.toFixed(2) + '°');
+    set('iss-lon', issLon.toFixed(2) + '°');
+    set('iss-alt', issAlt);
+    set('iss-vel', issVel);
+    set('iss-vis', issVis);
+
+    if (userLat && userLon) {
+      const dist = Math.round(haversineKm(userLat, userLon, issLat, issLon));
+      set('iss-dist', dist.toLocaleString('it-IT'));
+    }
+
+    if (elStatus) {
+      elStatus.style.background = 'rgba(91,196,187,0.07)';
+      elStatus.style.borderColor = 'rgba(91,196,187,0.2)';
+      elStatus.style.color = 'var(--teal)';
+      elStatus.textContent = `● Live — ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
+    }
+  } catch(e) {
+    if (elStatus) {
+      elStatus.style.color = 'var(--danger)';
+      elStatus.textContent = '⚠️ API non raggiungibile — riprovo...';
+    }
+  }
+  // Rischedula solo se il pannello ISS è ancora attivo
+  if (document.getElementById('asub-iss')?.classList.contains('active')) {
+    issTimer = setTimeout(() => fetchISSPosition(userLat, userLon), 5000);
+  }
+}
+
+// ── Pannello Voyager ─────────────────────────────────────────
+// Dati di riferimento NASA (pubblicati + estrapolazione lineare)
+// Voyager 1: vel ~17.043 km/s ≈ 3.595 AU/anno (eliocentric)
+// Voyager 2: vel ~15.341 km/s ≈ 3.232 AU/anno
+// Distanze di riferimento confermate da NASA/JPL al 1 Gen 2024:
+//   V1 ≈ 162.43 AU,  V2 ≈ 135.73 AU  (fonte: NASA Eyes on Solar System)
+const V1_REF  = { date: new Date('2024-01-01T00:00:00Z'), au: 162.43, velKms: 17.043, velAuYear: 3.595 };
+const V2_REF  = { date: new Date('2024-01-01T00:00:00Z'), au: 135.73, velKms: 15.341, velAuYear: 3.232 };
+const AU_KM   = 149597870.7; // km per 1 AU
+const LIGHT_S = 299792.458;  // km/s
+
+function voyagerNow(ref) {
+  const now = Date.now();
+  const yearsElapsed = (now - ref.date.getTime()) / (365.25 * 24 * 3600 * 1000);
+  const au = ref.au + ref.velAuYear * yearsElapsed;
+  const km = au * AU_KM;
+  const lightSec = km / LIGHT_S;
+  const lightMin = lightSec / 60;
+  const lightH   = lightMin / 60;
+  return { au: au.toFixed(2), km: Math.round(km).toLocaleString('it-IT'), lightH: lightH.toFixed(1), lightMin: lightMin.toFixed(0), velKms: ref.velKms };
+}
+
+function renderVoyagerPanel() {
+  return `
+    <div id="voyager-wrap">
+      <div class="astro-card" style="margin-bottom:10px">
+        <div class="astro-card-title" style="color:#a082ff">🚀 Sonde Voyager nello Spazio Interstellare</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6">
+          Le sonde Voyager sono gli oggetti <strong style="color:var(--text)">più lontani mai costruiti dall'uomo</strong>. 
+          Lanciate dalla NASA nel 1977, hanno attraversato l'eliopausa ed entrato nello <strong style="color:var(--text)">spazio interstellare</strong>.
+          Le distanze sono calcolate in tempo reale dalla traiettoria ufficiale NASA/JPL.
+        </div>
+      </div>
+      <div id="voyager-cards">
+        <div class="loading" style="min-height:120px"><div class="loading-icon" style="font-size:24px">🚀</div></div>
+      </div>
+      <div class="last-updated" style="padding:4px 0 12px" id="voyager-updated">Calcolo in corso...</div>
+    </div>
+  `;
+}
+
+function renderVoyagerLive() {
+  const el = document.getElementById('voyager-cards');
+  const updEl = document.getElementById('voyager-updated');
+  if (!el) return;
+
+  const v1 = voyagerNow(V1_REF);
+  const v2 = voyagerNow(V2_REF);
+
+  // Scala visiva: V1 è la più lontana
+  const v1Pct = 100;
+  const v2Pct = (parseFloat(v2.au) / parseFloat(v1.au) * 100).toFixed(1);
+
+  el.innerHTML = `
+    <!-- Voyager 1 -->
+    <div class="astro-card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div style="font-size:38px">🚀</div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">Voyager 1</div>
+          <div style="font-size:10px;color:var(--muted)">Lanciata il 5 Settembre 1977 · Spazio interstellare dal 2012</div>
+        </div>
+        <div style="margin-left:auto;background:rgba(91,196,187,0.12);border:1px solid rgba(91,196,187,0.25);border-radius:8px;padding:4px 10px;font-size:10px;color:var(--teal);font-weight:600;white-space:nowrap">● Attiva</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div class="iss-stat"><div class="iss-stat-val" style="font-size:16px;color:#a082ff">${v1.au} AU</div><div class="iss-stat-label">Distanza dal Sole</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" style="font-size:13px;color:#a082ff">${v1.km} km</div><div class="iss-stat-label">In chilometri</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" style="font-size:16px;color:#fbbf24">${v1.lightH}h</div><div class="iss-stat-label">Luce da Terra</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" style="font-size:16px;color:var(--teal)">${v1.velKms} km/s</div><div class="iss-stat-label">Velocità</div></div>
+      </div>
+      <div style="font-size:9.5px;color:var(--muted2);margin-bottom:4px">Distanza relativa a Voyager 2</div>
+      <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${v1Pct}%;background:linear-gradient(90deg,#a082ff,#c0a0ff);border-radius:4px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted2);margin-top:3px"><span>Sole</span><span>${v1.au} AU →</span></div>
+      <div style="margin-top:10px;font-size:10.5px;color:var(--muted);line-height:1.5;padding-top:10px;border-top:1px solid var(--border)">
+        📻 Il segnale radio viaggia a <strong style="color:var(--text)">velocità della luce</strong> e impiega <strong style="color:var(--text)">${v1.lightH} ore</strong> per arrivare a Terra.
+        Opera nella banda X (8.4 GHz), potenza trasmettitore: 22.4 watt.
+      </div>
+    </div>
+
+    <!-- Voyager 2 -->
+    <div class="astro-card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div style="font-size:38px">🛸</div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">Voyager 2</div>
+          <div style="font-size:10px;color:var(--muted)">Lanciata il 20 Agosto 1977 · Spazio interstellare dal 2018</div>
+        </div>
+        <div style="margin-left:auto;background:rgba(91,196,187,0.12);border:1px solid rgba(91,196,187,0.25);border-radius:8px;padding:4px 10px;font-size:10px;color:var(--teal);font-weight:600;white-space:nowrap">● Attiva</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div class="iss-stat"><div class="iss-stat-val" style="font-size:16px;color:#a082ff">${v2.au} AU</div><div class="iss-stat-label">Distanza dal Sole</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" style="font-size:13px;color:#a082ff">${v2.km} km</div><div class="iss-stat-label">In chilometri</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" style="font-size:16px;color:#fbbf24">${v2.lightH}h</div><div class="iss-stat-label">Luce da Terra</div></div>
+        <div class="iss-stat"><div class="iss-stat-val" style="font-size:16px;color:var(--teal)">${v2.velKms} km/s</div><div class="iss-stat-label">Velocità</div></div>
+      </div>
+      <div style="font-size:9.5px;color:var(--muted2);margin-bottom:4px">Distanza relativa a Voyager 1</div>
+      <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${v2Pct}%;background:linear-gradient(90deg,#7eb8e8,#a0d0f0);border-radius:4px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted2);margin-top:3px"><span>Sole</span><span>${v2.au} AU →</span></div>
+      <div style="margin-top:10px;font-size:10.5px;color:var(--muted);line-height:1.5;padding-top:10px;border-top:1px solid var(--border)">
+        📡 Unica sonda ad aver sorvolato <strong style="color:var(--text)">tutti e 4 i pianeti giganti</strong>: Giove (1979), Saturno (1981), Urano (1986), Nettuno (1989).
+        Segnale: ${v2.lightH}h di ritardo andata, ${(parseFloat(v2.lightH)*2).toFixed(1)}h round-trip.
+      </div>
+    </div>
+
+    <!-- Scala del sistema solare -->
+    <div class="astro-card">
+      <div class="astro-card-title" style="color:#a082ff">📐 Scala: distanze dal Sole</div>
+      ${[
+        ['☀️','Sole','0 AU','#fbbf24'],
+        ['🌍','Terra','1 AU','#5bc4bb'],
+        ['♃','Giove','5.2 AU','#c8a96e'],
+        ['⛢','Urano','19.2 AU','#7eb8e8'],
+        ['♆','Nettuno','30.1 AU','#7eb8e8'],
+        ['🔵','Eliopausa','~120 AU','#a082ff'],
+        ['🚀','Voyager 2',v2.au+' AU','#a082ff'],
+        ['🚀','Voyager 1',v1.au+' AU','#c0a0ff'],
+      ].map(([ic, nm, dist, col]) => {
+        const auVal = parseFloat(dist) || 0;
+        const pct = Math.min(100, (auVal / parseFloat(v1.au)) * 100).toFixed(1);
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+          <div style="width:20px;text-align:center;font-size:13px">${ic}</div>
+          <div style="width:72px;font-size:10.5px;color:var(--muted);flex-shrink:0">${nm}</div>
+          <div style="flex:1;height:5px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;min-width:${auVal>0?3:0}px"></div>
+          </div>
+          <div style="width:56px;text-align:right;font-size:10px;color:var(--muted2)">${dist}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+
+  if (updEl) updEl.textContent = `Distanze calcolate dalla traiettoria NASA/JPL · ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+// ── Utilità astronomiche ─────────────────────────────────────
+function toJulian(date) {
+  return date.getTime() / 86400000 + 2440587.5;
+}
+
+function mercuryVis(T, today, lat) {
+  const L = (252.251 + 149474.07 * T) % 360;
+  const sun = (280.46646 + 36000.76983 * T) % 360;
+  const elong = ((L - sun) % 360 + 360) % 360;
+  const visible = elong > 15 && elong < 90 ? 'sera' : elong > 270 && elong < 345 ? 'mattina' : 'no';
+  return { visible, info: `Elong. ${elong.toFixed(0)}°` };
+}
+function venusVis(T, today, lat) {
+  const L = (181.979 + 58519.213 * T) % 360;
+  const sun = (280.46646 + 36000.76983 * T) % 360;
+  const elong = ((L - sun) % 360 + 360) % 360;
+  const visible = elong > 20 && elong < 170 ? 'sera' : elong > 190 && elong < 340 ? 'mattina' : 'no';
+  return { visible, info: `Elong. ${elong.toFixed(0)}° · "Stella della sera"` };
+}
+function marsVis(T, today, lat) {
+  const L = (355.433 + 19141.696 * T) % 360;
+  const sun = (280.46646 + 36000.76983 * T) % 360;
+  const elong = Math.abs(((L - sun) % 360 + 360) % 360);
+  const vis = elong > 30 ? (elong < 180 ? 'sera' : 'mattina') : 'no';
+  return { visible: vis, info: `Elong. ${elong.toFixed(0)}°` };
+}
+function jupiterVis(T, today, lat) {
+  const L = (34.351 + 3036.301 * T) % 360;
+  const sun = (280.46646 + 36000.76983 * T) % 360;
+  const elong = Math.abs(((L - sun) % 360 + 360) % 360);
+  const vis = elong > 20 ? (elong < 180 ? 'sera' : 'mattina') : 'no';
+  return { visible: vis, info: `Elong. ${elong.toFixed(0)}° · Mag ~${(-2.5 + elong/100).toFixed(1)}` };
+}
+function saturnVis(T, today, lat) {
+  const L = (50.077 + 1223.511 * T) % 360;
+  const sun = (280.46646 + 36000.76983 * T) % 360;
+  const elong = Math.abs(((L - sun) % 360 + 360) % 360);
+  const vis = elong > 20 ? (elong < 180 ? 'sera' : 'mattina') : 'no';
+  return { visible: vis, info: `Elong. ${elong.toFixed(0)}° · Anelli visibili` };
+}
+function uranusVis(T, today, lat) {
+  const L = (314.055 + 429.868 * T) % 360;
+  const sun = (280.46646 + 36000.76983 * T) % 360;
+  const elong = Math.abs(((L - sun) % 360 + 360) % 360);
+  const vis = elong > 20 ? (elong < 180 ? 'sera' : 'mattina') : 'no';
+  return { visible: vis, info: `Mag ~5.7 · Binocolo consigliato` };
+}
+
+// ── Riutilizzo funzioni ex-effemeridi ───────────────────────
 
 // Algoritmo sunrise/sunset NOAA (gml.noaa.gov/grad/solcalc)
 // Restituisce orari in UTC come oggetti Date
@@ -3447,143 +4097,129 @@ function fmtDur(h) {
   return `${hh}h ${String(mm).padStart(2,'0')}m`;
 }
 
+// ============================================================
+// EFFEMERIDI — Tab separato (sole, luna, 7 giorni)
+// ============================================================
+let effInitialized = false;
+
+function initEffemeridi() {
+  if (effInitialized) return;
+  effInitialized = true;
+  renderEffemeridi();
+}
+
 function renderEffemeridi() {
   const el = document.getElementById('eff-content');
-  const lat = currentLat || 38.11;
-  const lon = currentLon || 15.66;
-  const city = currentCity || 'Posizione corrente';
-  const region = currentRegion || '';
+  if (!el) return;
+
+  const lat  = currentLat || 38.11;
+  const lon  = currentLon || 15.66;
   const today = new Date();
 
-  // Calcola 7 giorni
-  const days = [];
-  for (let i=0; i<7; i++) {
+  const sunData = [];
+  for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    d.setHours(12,0,0,0);
-    const sun = sunTimes(lat, lon, d);
-    const moon = moonPhase(d);
-    days.push({ d, sun, moon });
+    d.setHours(12, 0, 0, 0);
+    sunData.push({ d, sun: sunTimes(lat, lon, d), moon: moonPhase(d) });
   }
-
-  const main = days[0];
+  const { sun: s, moon } = sunData[0];
   const [stagione, solstizio] = season(today, lat);
 
-  const dayCards = days.slice(1).map(({d, sun, moon}) => {
+  // Barra giorno
+  let timeBar = '';
+  if (s) {
+    const midnight = new Date(today); midnight.setHours(0,0,0,0);
+    const ms = 86400000;
+    const rP  = ((s.dawn  - midnight) / ms * 100).toFixed(1);
+    const sP  = ((s.dusk  - midnight) / ms * 100).toFixed(1);
+    const w   = (sP - rP).toFixed(1);
+    const now = ((today   - midnight) / ms * 100).toFixed(1);
+    timeBar = `
+      <div class="astro-timeline" style="margin:10px 0 4px">
+        <div class="astro-daybar" style="left:${rP}%;width:${w}%"></div>
+        <div class="astro-now-tick" style="left:${now}%"></div>
+      </div>
+      <div class="astro-tl-label"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>`;
+  }
+
+  // Carte 6 giorni successivi
+  const dayCards = sunData.slice(1).map(({ d, sun, moon: m }) => {
     if (!sun) return '';
     const dn = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][d.getDay()];
-    return `<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:3px">
+    return `<div class="astro-day-card">
       <div style="font-size:11px;font-weight:700;color:var(--text)">${dn} ${d.getDate()}</div>
       <div style="font-size:10px;color:var(--muted)">🌅 ${fmt(sun.rise)}</div>
       <div style="font-size:10px;color:var(--muted)">🌇 ${fmt(sun.set)}</div>
-      <div style="font-size:10px;color:var(--muted)">${moon.icon} ${fmtDur(sun.dayLen)}</div>
+      <div style="font-size:10px;color:var(--muted)">${m.icon} ${fmtDur(sun.dayLen)}</div>
     </div>`;
   }).join('');
 
   el.innerHTML = `
-    <style>
-      .eff-city-banner { display:flex; align-items:center; gap:10px; margin:0 16px 12px;
-        background:var(--glass); border:1px solid var(--glass-border); border-radius:14px;
-        padding:12px 14px; }
-      .eff-city-icon { font-size:26px; flex-shrink:0; }
-      .eff-city-name { font-size:15px; font-weight:700; color:var(--text); }
-      .eff-city-sub  { font-size:10px; color:var(--muted); margin-top:1px; }
-      .eff-card { background:var(--glass); border:1px solid var(--glass-border);
-        border-radius:16px; padding:14px 16px; margin:0 16px 12px; }
-      .eff-title { font-size:10px; font-weight:700; letter-spacing:1px;
-        color:var(--muted); text-transform:uppercase; margin-bottom:10px; }
-      .eff-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-      .eff-icon { font-size:22px; width:30px; text-align:center; flex-shrink:0; }
-      .eff-label { font-size:11px; color:var(--muted); }
-      .eff-value { font-size:14px; font-weight:700; color:var(--text); }
-      .eff-sub   { font-size:10px; color:var(--muted); }
-      .eff-timeline { position:relative; height:28px; background:rgba(255,255,255,0.04);
-        border-radius:14px; margin:10px 0; overflow:hidden; }
-      .eff-daybar { position:absolute; top:0; height:100%; background:linear-gradient(90deg,#f5a623,#ffe082,#f5a623);
-        border-radius:14px; opacity:0.35; }
-      .eff-now-tick { position:absolute; top:0; width:2px; height:100%; background:#fff; border-radius:1px; }
-      .eff-tl-label { display:flex; justify-content:space-between; font-size:9px; color:var(--muted); }
-      .eff-7day { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:0 16px 12px; }
-      .moon-bar-wrap { height:8px; background:rgba(255,255,255,0.08); border-radius:4px; margin-top:4px; overflow:hidden; }
-      .moon-bar { height:100%; border-radius:4px; background:linear-gradient(90deg,#a0a0c0,#e8e8ff); }
-    </style>
-
-    <!-- Banner città -->
-    <div class="eff-city-banner">
-      <div class="eff-city-icon">📍</div>
-      <div>
-        <div class="eff-city-name">${city}</div>
-        <div class="eff-city-sub">${region ? region + ' · ' : ''}${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E</div>
-      </div>
-    </div>
-
-    <!-- Card sole oggi -->
-    <div class="eff-card">
-      <div class="eff-title">☀️ Sole — Oggi ${today.toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'})}</div>
-      ${main.sun ? `
-        <!-- Barra giornata -->
-        <div class="eff-timeline">
-          ${(() => {
-            const midnight = new Date(today); midnight.setHours(0,0,0,0);
-            const dayMs = 86400000;
-            const rPct = ((main.sun.dawn - midnight) / dayMs * 100).toFixed(1);
-            const sPct = ((main.sun.dusk  - midnight) / dayMs * 100).toFixed(1);
-            const width = (sPct - rPct).toFixed(1);
-            const nowPct = ((today - midnight) / dayMs * 100).toFixed(1);
-            return `<div class="eff-daybar" style="left:${rPct}%;width:${width}%"></div>
-                    <div class="eff-now-tick" style="left:${nowPct}%"></div>`;
-          })()}
-        </div>
-        <div class="eff-tl-label"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+    <!-- Oggi: Sole -->
+    <div class="astro-card">
+      <div class="astro-card-title">☀️ Sole — ${today.toLocaleDateString('it-IT',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</div>
+      ${timeBar}
+      ${s ? `
         <div style="height:10px"></div>
-        <div class="eff-row"><div class="eff-icon">🌅</div><div><div class="eff-label">Alba</div><div class="eff-value">${fmt(main.sun.rise)}</div></div><div style="margin-left:auto"><div class="eff-label">Crepuscolo mattutino</div><div class="eff-sub">${fmt(main.sun.dawn)}</div></div></div>
-        <div class="eff-row"><div class="eff-icon">🌞</div><div><div class="eff-label">Mezzogiorno solare</div><div class="eff-value">${fmt(main.sun.transit)}</div></div><div style="margin-left:auto"><div class="eff-label">Elevazione max</div><div class="eff-sub">${main.sun.elevation}°</div></div></div>
-        <div class="eff-row"><div class="eff-icon">🌇</div><div><div class="eff-label">Tramonto</div><div class="eff-value">${fmt(main.sun.set)}</div></div><div style="margin-left:auto"><div class="eff-label">Crepuscolo serale</div><div class="eff-sub">${fmt(main.sun.dusk)}</div></div></div>
-        <div class="eff-row"><div class="eff-icon">⏱</div><div><div class="eff-label">Durata del giorno</div><div class="eff-value">${fmtDur(main.sun.dayLen)}</div></div><div style="margin-left:auto"><div class="eff-label">Declinazione solare</div><div class="eff-sub">${main.sun.decl}°</div></div></div>
-      ` : '<div style="color:var(--muted);font-size:12px">Sole sempre sotto l\'orizzonte o sempre sopra.</div>'}
+        <div class="astro-row">
+          <div class="astro-icon">🌅</div>
+          <div><div class="astro-label">Alba</div><div class="astro-value">${fmt(s.rise)}</div></div>
+          <div style="margin-left:auto;text-align:right"><div class="astro-label">Crepuscolo civile</div><div class="astro-sub">${fmt(s.dawn)}</div></div>
+        </div>
+        <div class="astro-row">
+          <div class="astro-icon">🌞</div>
+          <div><div class="astro-label">Mezzogiorno solare</div><div class="astro-value">${fmt(s.transit)}</div></div>
+          <div style="margin-left:auto;text-align:right"><div class="astro-label">Elevazione max</div><div class="astro-sub">${s.elevation}°</div></div>
+        </div>
+        <div class="astro-row">
+          <div class="astro-icon">🌇</div>
+          <div><div class="astro-label">Tramonto</div><div class="astro-value">${fmt(s.set)}</div></div>
+          <div style="margin-left:auto;text-align:right"><div class="astro-label">Crepuscolo serale</div><div class="astro-sub">${fmt(s.dusk)}</div></div>
+        </div>
+        <div class="astro-row">
+          <div class="astro-icon">⏱</div>
+          <div><div class="astro-label">Durata del giorno</div><div class="astro-value">${fmtDur(s.dayLen)}</div></div>
+          <div style="margin-left:auto;text-align:right"><div class="astro-label">Declinazione</div><div class="astro-sub">${s.decl}°</div></div>
+        </div>
+      ` : '<div style="color:var(--muted);font-size:12px">Dati non disponibili.</div>'}
     </div>
 
-    <!-- Card luna -->
-    <div class="eff-card">
-      <div class="eff-title">🌙 Luna — Fase attuale</div>
-      <div class="eff-row">
-        <div style="font-size:48px;line-height:1">${main.moon.icon}</div>
+    <!-- Oggi: Luna -->
+    <div class="astro-card">
+      <div class="astro-card-title">🌙 Luna di oggi</div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="font-size:54px;line-height:1;filter:drop-shadow(0 0 14px rgba(200,200,255,0.3))">${moon.icon}</div>
         <div style="flex:1">
-          <div class="eff-value">${main.moon.name}</div>
-          <div class="eff-label" style="margin-top:2px">Illuminazione ${(main.moon.pct < 0.5 ? main.moon.pct*2 : (1-main.moon.pct)*2)*100|0}%</div>
-          <div class="moon-bar-wrap"><div class="moon-bar" style="width:${(main.moon.pct < 0.5 ? main.moon.pct*2 : (1-main.moon.pct)*2)*100|0}%"></div></div>
-          <div class="eff-sub" style="margin-top:4px">Giorno ${main.moon.phase.toFixed(1)} / 29.5 del ciclo</div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${moon.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Giorno ${moon.phase.toFixed(1)} di 29.5</div>
+          <div class="moon-bar-wrap" style="margin-top:8px">
+            <div class="moon-bar" style="width:${Math.round((moon.pct<0.5?moon.pct*2:(1-moon.pct)*2)*100)}%"></div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">Illuminazione ~${Math.round((moon.pct<0.5?moon.pct*2:(1-moon.pct)*2)*100)}%</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px">
-        ${[['🌑','Nuova',0],['🌓','I Quarto',7.4],['🌕','Piena',14.8],['🌗','III Quarto',22.1]].map(([ic,nm,day])=>{
-          const d2 = new Date(today);
-          const diff = ((day - main.moon.phase) + 29.53) % 29.53;
-          d2.setDate(today.getDate() + Math.round(diff));
-          return `<div style="text-align:center;background:rgba(255,255,255,0.04);border-radius:10px;padding:8px 4px">
-            <div style="font-size:20px">${ic}</div>
-            <div style="font-size:9px;color:var(--muted);margin-top:2px">${nm}</div>
-            <div style="font-size:10px;font-weight:700;color:var(--text)">${d2.getDate()} ${['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'][d2.getMonth()]}</div>
-          </div>`;
-        }).join('')}
+    </div>
+
+    <!-- Stagione -->
+    <div class="astro-card">
+      <div class="astro-card-title">🗓 Stagione Astronomica</div>
+      <div class="astro-row">
+        <div style="font-size:30px">${stagione.split(' ')[0]}</div>
+        <div>
+          <div class="astro-value">${stagione.split(' ').slice(1).join(' ')}</div>
+          <div class="astro-sub">Inizio astronomico: ${solstizio}</div>
+        </div>
       </div>
     </div>
 
-    <!-- Card stagione -->
-    <div class="eff-card">
-      <div class="eff-title">🗓 Stagione & Anno Solare</div>
-      <div class="eff-row"><div class="eff-icon" style="font-size:28px">${stagione.split(' ')[0]}</div>
-        <div><div class="eff-value">${stagione.split(' ').slice(1).join(' ')}</div>
-          <div class="eff-sub">Inizio astronomico: ${solstizio}</div></div>
-      </div>
-    </div>
-
-    <!-- 7 giorni -->
-    <div style="padding:0 16px 6px;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase">Prossimi 6 giorni</div>
-    <div class="eff-7day">${dayCards}</div>
-    <div class="last-updated" style="margin:4px 16px 12px">Calcolo astronomico locale · Algoritmo Jean Meeus</div>
+    <!-- 6 giorni -->
+    <div style="padding:0 16px 8px;font-size:9.5px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#ffc850;opacity:0.85">Prossimi 6 giorni</div>
+    <div class="astro-7day">${dayCards}</div>
+    <div class="last-updated" style="padding:4px 0 16px">Calcolo locale · Algoritmo NOAA / Jean Meeus · ${currentCity}</div>
   `;
 }
+
 </script>
 
 
