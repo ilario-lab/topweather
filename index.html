@@ -3473,12 +3473,9 @@ function switchAstroSub(name, btn) {
     if (issTimer) clearTimeout(issTimer);
     fetchISSPosition(currentLat, currentLon);
   }
-  if (name === 'voyager') {
-    renderVoyagerLive();
-  }
-  if (name === 'perseverance') {
-    fetchPerseveranceData();
-  }
+  if (name === 'voyager') renderVoyagerLive();
+  if (name === 'perseverance') fetchPerseveranceData();
+  if (name === 'jwst') fetchJWSTData();
 }
 
 function renderAstroShell() {
@@ -3507,6 +3504,7 @@ function renderAstroShell() {
       <div class="astro-subtab" onclick="switchAstroSub('iss',this)">🛸 ISS</div>
       <div class="astro-subtab" onclick="switchAstroSub('voyager',this)">🚀 Voyager</div>
       <div class="astro-subtab" onclick="switchAstroSub('perseverance',this)">🤖 Perseverance</div>
+      <div class="astro-subtab" onclick="switchAstroSub('jwst',this)">🔭 James Webb</div>
     </div>
 
     <!-- LUNA -->
@@ -3532,6 +3530,11 @@ function renderAstroShell() {
     <!-- PERSEVERANCE -->
     <div class="astro-subpanel" id="asub-perseverance">
       ${renderPerseverancePanel()}
+    </div>
+
+    <!-- JAMES WEBB -->
+    <div class="astro-subpanel" id="asub-jwst">
+      ${renderJWSTPanel()}
     </div>
   `;
 
@@ -4468,6 +4471,242 @@ async function fetchPerseveranceData() {
     `;
   }
   if (upd) upd.textContent = `Immagini: NASA Image Library · ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+
+// ============================================================
+// JAMES WEBB SPACE TELESCOPE
+// ============================================================
+
+const JWST_LAUNCH  = new Date('2021-12-25T12:20:00Z');
+const JWST_TEMPS = {
+  warmSide1: 52, warmSide2: 13,
+  coldSide1: -235, coldSide2: -231,
+  miri: -266, nircam: -133, nirspec: -168, fgs: -168,
+};
+
+function renderJWSTPanel() {
+  return `
+    <div id="jwst-wrap">
+      <div class="astro-card" style="margin-bottom:10px;background:rgba(126,184,232,0.05);border-color:rgba(126,184,232,0.18)">
+        <div class="astro-card-title" style="color:#7eb8e8">🔭 James Webb Space Telescope</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6">
+          Il più grande e potente telescopio spaziale mai costruito — collaborazione
+          <strong style="color:var(--text)">NASA / ESA / CSA</strong>. Orbita il punto di Lagrange L2
+          a 1.5 milioni di km dalla Terra, puntando al buio profondo dell'universo.
+          Visualizzazione 3D via <strong style="color:var(--text)">NASA Eyes on the Solar System</strong>.
+        </div>
+      </div>
+
+      <!-- Selettore vista -->
+      <div style="display:flex;gap:6px;padding:0 16px 10px;overflow-x:auto;scrollbar-width:none">
+        <button onclick="setJWSTEyes('sc_jwst',this)" id="jwst-btn-scope"
+          style="flex:0 0 auto;padding:9px 12px;border-radius:12px;
+            border:1px solid rgba(126,184,232,0.35);background:rgba(126,184,232,0.12);
+            color:#7eb8e8;font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+          🔭 Telescopio
+        </button>
+        <button onclick="setJWSTEyes('sun_earth_l2',this)" id="jwst-btn-l2"
+          style="flex:0 0 auto;padding:9px 12px;border-radius:12px;
+            border:1px solid var(--border);background:var(--surface);
+            color:var(--muted);font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+          ⚖️ Punto L2
+        </button>
+        <button onclick="setJWSTEyes('home',this)" id="jwst-btn-sys"
+          style="flex:0 0 auto;padding:9px 12px;border-radius:12px;
+            border:1px solid var(--border);background:var(--surface);
+            color:var(--muted);font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+          🌐 Sistema Solare
+        </button>
+      </div>
+
+      <!-- NASA Eyes 3D embed -->
+      <div style="margin:0 16px 10px;border-radius:18px;overflow:hidden;
+        border:1px solid rgba(126,184,232,0.2);position:relative;height:360px;background:#020510">
+        <iframe id="jwst-eyes-frame"
+          src="https://eyes.nasa.gov/apps/solar-system/#/sc_jwst?embed=true"
+          allow="accelerometer;fullscreen" allowfullscreen loading="lazy"
+          style="width:100%;height:100%;border:none;display:block">
+        </iframe>
+        <div style="position:absolute;bottom:8px;right:10px;
+          background:rgba(0,0,0,0.65);border-radius:8px;padding:3px 9px;
+          font-size:9px;color:rgba(255,255,255,0.5);pointer-events:none;backdrop-filter:blur(4px)">
+          NASA Eyes on the Solar System · JPL
+        </div>
+      </div>
+      <div class="model-info-card" style="margin:0 16px 10px;font-size:10.5px">
+        🖱 Interattivo: trascina per ruotare · scroll per zoomare.
+        Con <em>Punto L2</em> visualizzi l'orbita halo attorno al secondo punto di Lagrange Terra-Sole.
+      </div>
+
+      <!-- Dati missione -->
+      <div id="jwst-stats">
+        <div class="loading" style="min-height:60px"><div class="loading-icon" style="font-size:20px">🔭</div></div>
+      </div>
+
+      <!-- Temperature strumenti -->
+      <div style="padding:0 16px 8px;font-size:9.5px;font-weight:600;letter-spacing:2.5px;
+        text-transform:uppercase;color:#7eb8e8;opacity:0.85;margin-top:4px">🌡 Temperature strumenti</div>
+      <div id="jwst-temps-el" style="padding:0 16px">
+        <div style="font-size:11px;color:var(--muted)">Caricamento...</div>
+      </div>
+
+      <!-- Immagini -->
+      <div style="padding:8px 16px 8px;font-size:9.5px;font-weight:600;letter-spacing:2.5px;
+        text-transform:uppercase;color:#7eb8e8;opacity:0.85;margin-top:4px">🌌 Ultime immagini del cosmo</div>
+      <div id="jwst-photos" style="padding:0 16px">
+        <div style="font-size:11px;color:var(--muted)">Caricamento immagini...</div>
+      </div>
+
+      <div class="last-updated" style="padding:8px 0 16px" id="jwst-updated">
+        Dati: NASA / ESA / CSA · STScI MAST Archive
+      </div>
+    </div>
+  `;
+}
+
+function setJWSTEyes(target, btn) {
+  const frame = document.getElementById('jwst-eyes-frame');
+  if (frame) frame.src = `https://eyes.nasa.gov/apps/solar-system/#/${target}?embed=true`;
+  ['scope','l2','sys'].forEach(id => {
+    const b = document.getElementById('jwst-btn-' + id);
+    if (!b) return;
+    b.style.background = 'var(--surface)'; b.style.borderColor = 'var(--border)'; b.style.color = 'var(--muted)';
+  });
+  if (btn) {
+    btn.style.background = 'rgba(126,184,232,0.12)';
+    btn.style.borderColor = 'rgba(126,184,232,0.35)';
+    btn.style.color = '#7eb8e8';
+  }
+}
+
+async function fetchJWSTData() {
+  const now = Date.now();
+  const daysSinceLaunch = Math.floor((now - JWST_LAUNCH.getTime()) / 86400000);
+  const yearsSinceLaunch = (daysSinceLaunch / 365.25).toFixed(1);
+
+  // Stats missione
+  const statsEl = document.getElementById('jwst-stats');
+  if (statsEl) statsEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px">
+      <div class="iss-stat">
+        <div class="iss-stat-val" style="color:#7eb8e8;font-size:18px">${daysSinceLaunch.toLocaleString('it-IT')}</div>
+        <div class="iss-stat-label">Giorni in orbita</div>
+      </div>
+      <div class="iss-stat">
+        <div class="iss-stat-val" style="color:#a082ff;font-size:18px">${yearsSinceLaunch}y</div>
+        <div class="iss-stat-label">Anni missione</div>
+      </div>
+      <div class="iss-stat">
+        <div class="iss-stat-val" style="color:var(--teal);font-size:13px">~1.5M km</div>
+        <div class="iss-stat-label">Da Terra (L2)</div>
+      </div>
+    </div>
+    <div class="astro-card" style="margin:0 16px 10px">
+      <div class="astro-card-title" style="color:#7eb8e8">📡 Orbita & Caratteristiche</div>
+      <div class="astro-row">
+        <div class="astro-icon">⚖️</div>
+        <div><div class="astro-label">Punto di Lagrange</div><div class="astro-value" style="font-size:13px">Sun-Earth L2 · Orbita Halo</div></div>
+      </div>
+      <div class="astro-row">
+        <div class="astro-icon">🪞</div>
+        <div><div class="astro-label">Specchio primario</div><div class="astro-value" style="font-size:13px">6.5 m · 18 segmenti in berillio dorato</div></div>
+      </div>
+      <div class="astro-row">
+        <div class="astro-icon">📻</div>
+        <div><div class="astro-label">Downlink dati</div><div class="astro-value" style="font-size:13px">~28 GB/giorno via DSN</div></div>
+        <div style="margin-left:auto;text-align:right"><div class="astro-label">Durata prevista</div><div class="astro-sub">20+ anni</div></div>
+      </div>
+      <div class="astro-row" style="margin-bottom:0">
+        <div class="astro-icon">🌡</div>
+        <div><div class="astro-label">Lato caldo (parasole)</div><div class="astro-value" style="font-size:13px;color:#fbbf24">+52°C / +13°C</div></div>
+        <div style="margin-left:auto;text-align:right"><div class="astro-label">Lato freddo (specchio)</div><div class="astro-sub" style="color:#7eb8e8">-235°C / -231°C</div></div>
+      </div>
+    </div>
+  `;
+
+  // Temperature strumenti
+  const tempsEl = document.getElementById('jwst-temps-el');
+  if (tempsEl) {
+    const tempColor = t => t < -200 ? '#7eb8e8' : t < 0 ? '#a082ff' : '#fbbf24';
+    const instruments = [
+      { name: 'NIRCam', temp: JWST_TEMPS.nircam,  icon: '📷', desc: 'Near Infrared Camera' },
+      { name: 'NIRSpec', temp: JWST_TEMPS.nirspec, icon: '🔬', desc: 'Near IR Spectrograph' },
+      { name: 'MIRI',   temp: JWST_TEMPS.miri,    icon: '❄️', desc: 'Mid-Infrared · criocooler' },
+      { name: 'FGS',    temp: JWST_TEMPS.fgs,     icon: '🎯', desc: 'Fine Guidance Sensor' },
+    ];
+    tempsEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+        ${instruments.map(i => `
+          <div class="iss-stat" style="text-align:left;padding:10px 12px">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${i.icon} ${i.name}</div>
+            <div style="font-size:22px;font-weight:700;color:${tempColor(i.temp)};letter-spacing:-0.5px">${i.temp}°C</div>
+            <div style="font-size:8.5px;color:var(--muted2);margin-top:2px">${i.desc}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:10px;color:var(--muted);padding:2px 2px 12px;line-height:1.5">
+        ❄️ <strong style="color:#7eb8e8">MIRI a -266°C</strong> è lo strumento spaziale più freddo mai costruito —
+        più freddo dello spazio profondo. Richiede un criocooler attivo alimentato dall'elettricità del telescopio.
+      </div>
+    `;
+  }
+
+  // Immagini via NASA Image Library (CORS aperto)
+  const photoEl = document.getElementById('jwst-photos');
+  const updEl   = document.getElementById('jwst-updated');
+  let photos = [];
+
+  try {
+    const r = await fetch('https://images-api.nasa.gov/search?q=james+webb+telescope+galaxy&media_type=image&page_size=9&year_start=2022');
+    if (r.ok) {
+      const pj = await r.json();
+      for (const item of (pj.collection?.items || [])) {
+        const link = item.links?.find(l => l.href?.match(/\.(jpg|jpeg|png)/i));
+        const data = item.data?.[0];
+        if (link && data) { photos.push({ thumb: link.href, title: data.title || 'JWST' }); if (photos.length >= 6) break; }
+      }
+    }
+  } catch(e) {}
+
+  // Fallback: immagini iconiche JWST (Wikimedia Commons / STScI)
+  if (photos.length < 3) photos = [
+    { thumb: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Webb%27s_First_Deep_Field.jpg/640px-Webb%27s_First_Deep_Field.jpg', title: 'Webb First Deep Field – SMACS 0723' },
+    { thumb: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Webb_-_Carina_Nebula_%282022%29.jpg/640px-Webb_-_Carina_Nebula_%282022%29.jpg', title: 'Nebulosa della Carena' },
+    { thumb: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Webb_captures_dying_star%27s_final_%27performance%27_in_unprecedented_detail_%2852258985007%29.jpg/640px-Webb_captures_dying_star%27s_final_%27performance%27_in_unprecedented_detail_%2852258985007%29.jpg', title: 'Nebulosa Anello del Sud' },
+    { thumb: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/Webb_inspects_the_heart_of_the_Milky_Way_%2852854850083%29.jpg/640px-Webb_inspects_the_heart_of_the_Milky_Way_%2852854850083%29.jpg', title: 'Centro della Via Lattea' },
+    { thumb: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Pillars_of_Creation_%28NIRCam_Image%29.jpg/640px-Pillars_of_Creation_%28NIRCam_Image%29.jpg', title: 'Pilastri della Creazione' },
+    { thumb: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Webb_SMACS_723_ero_00001.jpg/640px-Webb_SMACS_723_ero_00001.jpg', title: 'Quintetto di Stefano' },
+  ];
+
+  if (photoEl) photoEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+      ${photos.slice(0,6).map(p => `
+        <div style="border-radius:10px;overflow:hidden;border:1px solid var(--border);
+          aspect-ratio:1;background:#020510;cursor:pointer" title="${p.title}"
+          onclick="window.open('https://webbtelescope.org/images','_blank')">
+          <img src="${p.thumb}" alt="${p.title}" loading="lazy"
+            style="width:100%;height:100%;object-fit:cover;display:block"
+            onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'height:100%;display:flex;align-items:center;justify-content:center;font-size:24px\\'>🌌</div>'">
+        </div>
+      `).join('')}
+    </div>
+    <div style="font-size:10px;color:var(--muted);text-align:center;padding-bottom:6px">
+      🌌 Immagini NASA/ESA/CSA/STScI — Tap per aprire Webb Telescope Gallery
+    </div>
+    <div style="text-align:center;padding-bottom:4px;display:flex;gap:8px;justify-content:center">
+      <a href="https://webbtelescope.org/images" target="_blank"
+        style="font-size:11px;color:#7eb8e8;text-decoration:none;
+        background:rgba(126,184,232,0.1);border:1px solid rgba(126,184,232,0.25);
+        border-radius:50px;padding:6px 14px;display:inline-block">🔭 Webb Gallery →</a>
+      <a href="https://spacetelescopelive.org/webb" target="_blank"
+        style="font-size:11px;color:#a082ff;text-decoration:none;
+        background:rgba(160,130,255,0.1);border:1px solid rgba(160,130,255,0.25);
+        border-radius:50px;padding:6px 14px;display:inline-block">📡 Osservazioni Live →</a>
+    </div>
+  `;
+
+  if (updEl) updEl.textContent = `Immagini: NASA Image Library & STScI · Temperature: NASA GSFC · ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
 }
 
 
