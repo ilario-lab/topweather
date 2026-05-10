@@ -1088,26 +1088,26 @@
     <div class="tab" data-name="radar" onclick="switchTab('radar',this)">
       <span class="tab-icon">📡</span><span class="tab-label">Radar</span>
     </div>
-    <div class="tab" data-name="ventusky" onclick="switchTab('ventusky',this)">
-      <span class="tab-icon">🔭</span><span class="tab-label">Astronomia</span>
-    </div>
-    <div class="tab" data-name="terremoti" onclick="switchTab('terremoti',this)">
-      <span class="tab-icon">🌍</span><span class="tab-label">Sismi & Kp</span>
+    <div class="tab" data-name="gfs" onclick="switchTab('gfs',this)">
+      <span class="tab-icon">🌐</span><span class="tab-label">Modelli</span>
     </div>
     <div class="tab" data-name="mare" onclick="switchTab('mare',this)">
       <span class="tab-icon">🌊</span><span class="tab-label">Mare</span>
     </div>
-    <div class="tab" data-name="pollini" onclick="switchTab('pollini',this)">
-      <span class="tab-icon">🌿</span><span class="tab-label">Pollini</span>
-    </div>
-    <div class="tab" data-name="gfs" onclick="switchTab('gfs',this)">
-      <span class="tab-icon">🌐</span><span class="tab-label">Modelli</span>
-    </div>
     <div class="tab" data-name="metar" onclick="switchTab('metar',this)">
       <span class="tab-icon">✈️</span><span class="tab-label">METAR/TAF</span>
     </div>
+    <div class="tab" data-name="pollini" onclick="switchTab('pollini',this)">
+      <span class="tab-icon">🌿</span><span class="tab-label">Pollini</span>
+    </div>
+    <div class="tab" data-name="terremoti" onclick="switchTab('terremoti',this)">
+      <span class="tab-icon">🌍</span><span class="tab-label">Sismi & Kp</span>
+    </div>
     <div class="tab" data-name="effemeridi" onclick="switchTab('effemeridi',this)">
       <span class="tab-icon">☀️</span><span class="tab-label">Effemeridi</span>
+    </div>
+    <div class="tab" data-name="ventusky" onclick="switchTab('ventusky',this)">
+      <span class="tab-icon">🔭</span><span class="tab-label">Astronomia</span>
     </div>
   </div>
 
@@ -2440,46 +2440,57 @@ function renderModelsShell() {
 
     <!-- TEMPORALI LIVE sub-panel -->
     <div class="model-subpanel" id="msub-lightning">
-      <div class="lightning-stats" id="lightning-stats">
-        <div class="lightning-stat">
-          <div class="lightning-stat-val" id="blitz-count-total">—</div>
-          <div class="lightning-stat-label">Fulmini totali</div>
-        </div>
-        <div class="lightning-stat">
-          <div class="lightning-stat-val" id="blitz-count-min">—</div>
-          <div class="lightning-stat-label">Ultimi 60s</div>
-        </div>
-        <div class="lightning-stat">
-          <div class="lightning-stat-val" id="blitz-ws-status" style="font-size:13px">●</div>
-          <div class="lightning-stat-label">Connessione</div>
-        </div>
+      <!-- Selettore area -->
+      <div style="display:flex;gap:6px;padding:0 16px 10px;overflow-x:auto;scrollbar-width:none">
+        <button onclick="setLightningArea('EU',this)" id="blitz-btn-eu"
+          style="flex:0 0 auto;padding:8px 14px;border-radius:50px;
+            border:1px solid rgba(251,191,36,0.35);background:rgba(251,191,36,0.12);
+            color:#fbbf24;font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+          🇪🇺 Europa
+        </button>
+        <button onclick="setLightningArea('IT',this)" id="blitz-btn-it"
+          style="flex:0 0 auto;padding:8px 14px;border-radius:50px;
+            border:1px solid var(--border);background:var(--surface);
+            color:var(--muted);font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+          🇮🇹 Italia
+        </button>
+        <button onclick="setLightningArea('MED',this)" id="blitz-btn-med"
+          style="flex:0 0 auto;padding:8px 14px;border-radius:50px;
+            border:1px solid var(--border);background:var(--surface);
+            color:var(--muted);font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+          🌊 Mediterraneo
+        </button>
+        <button onclick="setLightningArea('WORLD',this)" id="blitz-btn-world"
+          style="flex:0 0 auto;padding:8px 14px;border-radius:50px;
+            border:1px solid var(--border);background:var(--surface);
+            color:var(--muted);font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;cursor:pointer">
+          🌍 Mondo
+        </button>
       </div>
-      <div class="lightning-wrap" style="height:380px">
-        <div id="lightning-map" style="width:100%;height:100%"></div>
-        <div id="lightning-overlay" style="position:absolute;inset:0;display:flex;flex-direction:column;
-          align-items:center;justify-content:center;background:rgba(6,14,24,0.82);z-index:1000;
-          gap:10px;font-size:13px;color:var(--muted);text-align:center;padding:20px">
-          <div style="font-size:32px">⚡</div>
-          <div>Connessione in corso...</div>
-          <div style="font-size:10px;opacity:0.6">Rete Blitzortung.org · WebSocket</div>
-        </div>
+      <!-- Mappa embed map.blitzortung.org (embed ufficialmente permesso) -->
+      <div class="lightning-wrap" style="height:400px">
+        <iframe id="blitz-iframe"
+          src="https://map.blitzortung.org/#5/44/14"
+          allowfullscreen loading="lazy"
+          style="width:100%;height:100%;border:none;display:block;border-radius:0">
+        </iframe>
       </div>
       <div class="lightning-legend">
         <div class="lightning-legend-title">⚡ Legenda fulminazioni</div>
         <div class="lightning-legend-row">
-          <div class="lightning-dot"><span style="background:#ff2244"></span>&lt; 30s</div>
-          <div class="lightning-dot"><span style="background:#ff8c00"></span>30s–2min</div>
-          <div class="lightning-dot"><span style="background:#fbbf24"></span>2–10 min</div>
-          <div class="lightning-dot"><span style="background:#5bc4bb"></span>10–30 min</div>
-          <div class="lightning-dot"><span style="background:#2a3a55"></span>&gt; 30 min</div>
+          <div class="lightning-dot"><span style="background:#ff2244"></span>&lt; 5 min</div>
+          <div class="lightning-dot"><span style="background:#ff8c00"></span>5–15 min</div>
+          <div class="lightning-dot"><span style="background:#fbbf24"></span>15–30 min</div>
+          <div class="lightning-dot"><span style="background:#5bc4bb"></span>30–60 min</div>
+          <div class="lightning-dot"><span style="background:#2a3a55"></span>&gt; 1 ora</div>
         </div>
       </div>
       <div class="model-info-card">
-        <strong>Mappa nativa in tempo reale</strong> — dati via <strong>WebSocket Blitzortung.org</strong>, 
-        rete di oltre 2000 stazioni VLF/LF distribuite globalmente. Latenza ~2–5 secondi. 
-        I punti svaniscono progressivamente in base all'età. Mappa interattiva: puoi zoomare e spostare liberamente.
+        <strong>Blitzortung.org Live Map</strong> — mappa interattiva in tempo reale della rete <strong>Blitzortung.org</strong>,
+        oltre 2000 stazioni VLF/LF nel mondo, latenza ~2–5 secondi per fulmine.
+        Usa i pulsanti sopra per cambiare area. Puoi anche zoomare e spostare liberamente la mappa.
       </div>
-      <div class="blitz-source">Dati: <a href="https://www.blitzortung.org" target="_blank">Blitzortung.org</a> · CC BY-NC-SA</div>
+      <div class="blitz-source">Dati: <a href="https://map.blitzortung.org" target="_blank">map.blitzortung.org</a> · CC BY-NC-SA</div>
     </div>
   `;
 
@@ -2638,202 +2649,36 @@ function gfsSetVar(v,btn) {
   if(gfsDataGrid.length) gfsDrawFrame(gfsFrameIndex);
 }
 
-// ── Lightning — mappa Leaflet nativa + WebSocket Blitzortung ──
-let lightningMap = null;
-let lightningWS = null;
-let lightningMarkers = [];   // {marker, ts}
-let lightningTotal = 0;
-let lightningLast60 = [];    // timestamps ultimi 60s
-let lightningFadeTimer = null;
-let lightningMapInit = false;
 
-// Colore per età fulmine (ms)
-function blitzColor(ageMs) {
-  if (ageMs < 30000)  return { color: '#ff2244', r: 6 };
-  if (ageMs < 120000) return { color: '#ff8c00', r: 5 };
-  if (ageMs < 600000) return { color: '#fbbf24', r: 4 };
-  if (ageMs < 1800000) return { color: '#5bc4bb', r: 3 };
-  return { color: '#2a3a55', r: 2 };
-}
+// ── Lightning — map.blitzortung.org embed con selettore area ─
+const BLITZ_AREAS = {
+  EU:    'https://map.blitzortung.org/#5/44/14',
+  IT:    'https://map.blitzortung.org/#6/42/13',
+  MED:   'https://map.blitzortung.org/#4/38/18',
+  WORLD: 'https://map.blitzortung.org/#2/20/0',
+};
 
-function initLightningMap() {
-  if (lightningMapInit) return;
-  lightningMapInit = true;
-
-  const mapEl = document.getElementById('lightning-map');
-  if (!mapEl) return;
-
-  // Forza dimensioni esplicite prima che Leaflet misuri il contenitore
-  const wrap = mapEl.closest('.lightning-wrap');
-  if (wrap) {
-    const h = wrap.offsetHeight || 380;
-    mapEl.style.width  = wrap.offsetWidth  + 'px';
-    mapEl.style.height = h + 'px';
-  }
-
-  lightningMap = L.map('lightning-map', {
-    center: [45, 13], zoom: 5,
-    zoomControl: true, attributionControl: false,
-    preferCanvas: true
+function setLightningArea(area, btn) {
+  const frame = document.getElementById('blitz-iframe');
+  if (frame) frame.src = BLITZ_AREAS[area] || BLITZ_AREAS.EU;
+  ['eu','it','med','world'].forEach(id => {
+    const b = document.getElementById('blitz-btn-' + id);
+    if (!b) return;
+    b.style.background = 'var(--surface)';
+    b.style.borderColor = 'var(--border)';
+    b.style.color = 'var(--muted)';
   });
-
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png', {
-    maxZoom: 12, opacity: 0.9
-  }).addTo(lightningMap);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png', {
-    maxZoom: 12, opacity: 0.6, zIndex: 500
-  }).addTo(lightningMap);
-
-  // Dopo init, ricalcola dimensioni reali
-  setTimeout(() => {
-    lightningMap.invalidateSize();
-    connectBlitzWS();
-  }, 200);
-}
-
-function connectBlitzWS() {
-  // Blitzortung espone server WebSocket numerati 1–6
-  // Il server 1 copre area Europa, il 3 globale
-  const servers = [
-    'wss://ws1.blitzortung.org/ws',
-    'wss://ws8.blitzortung.org/ws',
-    'wss://ws7.blitzortung.org/ws',
-    'wss://ws3.blitzortung.org/ws',
-  ];
-  let serverIdx = 0;
-
-  function tryConnect() {
-    setBlitzStatus('connecting');
-    const url = servers[serverIdx % servers.length];
-    serverIdx++;
-
-    try {
-      lightningWS = new WebSocket(url);
-    } catch(e) {
-      setTimeout(tryConnect, 5000); return;
-    }
-
-    lightningWS.onopen = () => {
-      lightningWS.send(JSON.stringify({ west: -180, east: 180, north: 90, south: -90 }));
-      setBlitzStatus('live');
-      hideOverlay();
-      // Avvia fade timer ora che la connessione è attiva
-      if (!lightningFadeTimer) {
-        lightningFadeTimer = setInterval(updateLightningColors, 15000);
-      }
-    };
-
-    lightningWS.onmessage = (evt) => {
-      try {
-        const d = JSON.parse(evt.data);
-        // Blitzortung invia: {time, lat, lon, alt, pol, mds, mcg, ...}
-        if (d.lat !== undefined && d.lon !== undefined) {
-          addStrike(d.lat / 1e6, d.lon / 1e6, d.time);
-        }
-        // Alcuni server inviano array di strikes
-        if (Array.isArray(d.strokes)) {
-          d.strokes.forEach(s => addStrike(s.lat / 1e6, s.lon / 1e6, s.time));
-        }
-      } catch(e) { /* ignora frame non-JSON */ }
-    };
-
-    lightningWS.onerror = () => { setBlitzStatus('error'); };
-
-    lightningWS.onclose = () => {
-      setBlitzStatus('reconnecting');
-      setTimeout(tryConnect, 4000);
-    };
+  if (btn) {
+    btn.style.background = 'rgba(251,191,36,0.12)';
+    btn.style.borderColor = 'rgba(251,191,36,0.35)';
+    btn.style.color = '#fbbf24';
   }
-
-  tryConnect();
-}
-
-function addStrike(lat, lon, timeNs) {
-  if (!lightningMap) return;
-  if (isNaN(lat) || isNaN(lon)) return;
-
-  const now = Date.now();
-  const ts = timeNs ? timeNs / 1e6 : now;   // nanosec → ms
-  const age = now - ts;
-
-  lightningTotal++;
-  lightningLast60.push(now);
-
-  const { color, r } = blitzColor(Math.max(0, age));
-
-  // Cerchio piccolo e luminoso
-  const m = L.circleMarker([lat, lon], {
-    radius: r, color, fillColor: color,
-    fillOpacity: 0.9, weight: 0.5, opacity: 1
-  }).addTo(lightningMap);
-
-  lightningMarkers.push({ marker: m, ts: now });
-
-  // Rimuovi marker più vecchi di 45 minuti (tetto memoria)
-  if (lightningMarkers.length > 3000) {
-    const old = lightningMarkers.shift();
-    if (old.marker) lightningMap.removeLayer(old.marker);
-  }
-
-  // Aggiorna contatori
-  updateLightningStats();
-}
-
-function updateLightningColors() {
-  const now = Date.now();
-  const cutoff = now - 45 * 60 * 1000;
-
-  // Rimuovi i vecchi e aggiorna colori
-  lightningMarkers = lightningMarkers.filter(({ marker, ts }) => {
-    if (ts < cutoff) {
-      lightningMap?.removeLayer(marker);
-      return false;
-    }
-    const age = now - ts;
-    const { color, r } = blitzColor(age);
-    marker.setStyle({ color, fillColor: color, radius: r });
-    return true;
-  });
-
-  updateLightningStats();
-}
-
-function updateLightningStats() {
-  const now = Date.now();
-  // Ultimi 60s
-  lightningLast60 = lightningLast60.filter(t => now - t < 60000);
-
-  const elTotal = document.getElementById('blitz-count-total');
-  const elMin   = document.getElementById('blitz-count-min');
-  if (elTotal) elTotal.textContent = lightningTotal.toLocaleString('it-IT');
-  if (elMin)   elMin.textContent   = lightningLast60.length.toLocaleString('it-IT');
-}
-
-function setBlitzStatus(state) {
-  const el = document.getElementById('blitz-ws-status');
-  if (!el) return;
-  const map = {
-    connecting:   { text: '●', color: '#fbbf24', label: 'Connessione' },
-    live:         { text: '●', color: '#5bc4bb', label: 'Live' },
-    reconnecting: { text: '●', color: '#ff8c00', label: 'Riconnessione' },
-    error:        { text: '●', color: '#e07070', label: 'Errore' },
-  };
-  const s = map[state] || map.error;
-  el.textContent = s.text;
-  el.style.color = s.color;
-  const label = el.parentElement?.querySelector('.lightning-stat-label');
-  if (label) label.textContent = s.label;
-}
-
-function hideOverlay() {
-  const ov = document.getElementById('lightning-overlay');
-  if (ov) { ov.style.transition = 'opacity 0.6s'; ov.style.opacity = '0'; setTimeout(() => ov.remove(), 700); }
 }
 
 function startLightningCounter() {
-  // La mappa viene inizializzata solo quando l'utente apre il tab Temporali
-  // per evitare che Leaflet calcoli dimensioni su un elemento nascosto (display:none)
+  // Nessuna operazione necessaria — embed LightningMaps.org gestisce tutto
 }
+
 
 // ============================================================
 // ============================================================
