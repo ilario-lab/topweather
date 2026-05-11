@@ -2752,7 +2752,43 @@ function renderMetarShell() {
       .fr-mvfr { background:rgba(96,165,250,0.2); color:#60a5fa; }
       .fr-ifr  { background:rgba(248,113,113,0.2); color:#f87171; }
       .fr-lifr { background:rgba(192,132,252,0.2); color:#c084fc; }
+      /* Widget crosswind pista 15/33 */
+      .cw-wrap {
+        margin: 12px 16px 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 16px;
+        position: relative; overflow: hidden;
+      }
+      .cw-wrap::before {
+        content:''; position:absolute; inset:0;
+        background: radial-gradient(ellipse at 80% 0%, rgba(99,202,255,0.05) 0%, transparent 65%);
+        pointer-events:none;
+      }
+      .cw-title {
+        font-size:9.5px; font-weight:600; letter-spacing:2.5px;
+        text-transform:uppercase; color:#63caff; opacity:.85; margin-bottom:14px;
+      }
+      .cw-main { display:flex; gap:14px; align-items:center; }
+      .cw-canvas-wrap { flex-shrink:0; position:relative; }
+      .cw-stats { flex:1; display:flex; flex-direction:column; gap:8px; }
+      .cw-stat { background:rgba(255,255,255,0.04); border:1px solid var(--border);
+        border-radius:12px; padding:10px 12px; }
+      .cw-stat-label { font-size:9px; color:var(--muted); text-transform:uppercase;
+        letter-spacing:1px; margin-bottom:3px; }
+      .cw-stat-val { font-size:18px; font-weight:700; letter-spacing:-0.5px; }
+      .cw-limits { display:flex; gap:6px; margin-top:10px; }
+      .cw-limit { flex:1; background:rgba(255,255,255,0.03);
+        border:1px solid var(--border); border-radius:10px;
+        padding:8px 10px; text-align:center; }
+      .cw-limit-label { font-size:9px; color:var(--muted); margin-bottom:2px; }
+      .cw-limit-val { font-size:13px; font-weight:700; }
+      .cw-ok   { color: #4ade80; }
+      .cw-warn { color: #fbbf24; }
+      .cw-crit { color: #f87171; }
     </style>
+
     <div class="metar-top">
       <div class="metar-search">
         <input class="metar-input" id="metar-icao-input" placeholder="Codice ICAO (es. LICR)" maxlength="4">
@@ -2761,7 +2797,239 @@ function renderMetarShell() {
       <select class="metar-select" onchange="fetchMetar(this.value)">${stOpts}</select>
     </div>
     <div id="metar-body"><div class="loading"><div class="loading-icon">📡</div><div class="loading-text">Carico dati...</div></div></div>
+
+    <!-- Widget crosswind nativo -->
+    <div style="padding:0 16px 6px;font-size:9.5px;font-weight:600;letter-spacing:2.5px;
+      text-transform:uppercase;color:#63caff;opacity:0.85;margin-top:4px">💨 Crosswind — Pista 15/33</div>
+    <div class="cw-wrap" id="cw-widget">
+      <div style="color:var(--muted);font-size:12px;text-align:center;padding:8px 0">
+        In attesa dei dati METAR...
+      </div>
+    </div>
   `;
+
+  // Nessuna chiamata esterna necessaria
+}
+
+// ── Database piste aeroporti (heading magnetico pista principale) ─
+// Formato: ICAO → [{ name:'15/33', hdg:150, label:'15/33' }, ...]
+const RWY_DB = {
+  LICR: [{ name:'15/33', hdg:150, label:'15/33' }],
+  LICC: [{ name:'08/26', hdg: 80, label:'08/26' }, { name:'09/27', hdg: 90, label:'09/27' }],
+  LICB: [{ name:'13/31', hdg:130, label:'13/31' }],
+  LIPQ: [{ name:'09/27', hdg: 90, label:'09/27' }],
+  LIML: [{ name:'18/36', hdg:180, label:'18/36' }, { name:'17/35', hdg:170, label:'17/35' }],
+  LIRF: [{ name:'07/25', hdg: 70, label:'07/25' }, { name:'16/34', hdg:160, label:'16/34' }],
+  EGLL: [{ name:'09L/27R', hdg: 90, label:'09/27' }, { name:'09R/27L', hdg: 90, label:'09/27' }],
+  LFPG: [{ name:'08/26', hdg: 80, label:'08/26' }, { name:'09/27', hdg: 90, label:'09/27' }],
+  EDDF: [{ name:'07/25', hdg: 70, label:'07/25' }, { name:'18/36', hdg:180, label:'18/36' }],
+  LEMD: [{ name:'14/32', hdg:140, label:'14/32' }, { name:'18/36', hdg:180, label:'18/36' }],
+  EHAM: [{ name:'18/36', hdg:180, label:'18/36' }, { name:'09/27', hdg: 90, label:'09/27' }],
+  LSZH: [{ name:'10/28', hdg:100, label:'10/28' }, { name:'14/32', hdg:140, label:'14/32' }],
+  LIMC: [{ name:'17/35', hdg:170, label:'17/35' }, { name:'18/36', hdg:180, label:'18/36' }],
+  LIME: [{ name:'10/28', hdg:100, label:'10/28' }],
+  LIPZ: [{ name:'04/22', hdg: 40, label:'04/22' }],
+  LIRA: [{ name:'07/25', hdg: 70, label:'07/25' }],
+  LIRN: [{ name:'06/24', hdg: 60, label:'06/24' }],
+  LIBR: [{ name:'13/31', hdg:130, label:'13/31' }],
+  LICJ: [{ name:'02/20', hdg: 20, label:'02/20' }, { name:'07/25', hdg: 70, label:'07/25' }],
+  LICG: [{ name:'15/33', hdg:150, label:'15/33' }],
+};
+
+// Cache piste fetched da OurAirports
+const rwyCache = {};
+// Pista corrente selezionata
+let currentRwyHdg = 150;
+let currentRwyLabel = '15/33';
+let currentRwyAll = [{ name:'15/33', hdg:150, label:'15/33' }];
+
+async function fetchRunways(icao) {
+  // Prima controlla cache e DB locale
+  if (rwyCache[icao]) return rwyCache[icao];
+  if (RWY_DB[icao])   { rwyCache[icao] = RWY_DB[icao]; return RWY_DB[icao]; }
+
+  // Fallback: prova a ottenere i dati da aviationweather.gov (stesso dominio del METAR)
+  try {
+    const r = await fetch(
+      `https://aviationweather.gov/api/data/airport?ids=${icao}&format=json`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (r.ok) {
+      const data = await r.json();
+      const apt = Array.isArray(data) ? data[0] : data;
+      // aviationweather restituisce il campo 'rwy' con le piste
+      if (apt?.rwy?.length) {
+        const runways = apt.rwy.map(rw => {
+          const hdg = Math.round(parseFloat(rw.heading) || 90);
+          const label = (rw.id || '09/27').replace('C','').replace('L','').replace('R','');
+          return { name: rw.id || '09/27', hdg, label };
+        });
+        rwyCache[icao] = runways;
+        return runways;
+      }
+    }
+  } catch(e) {}
+
+  // Fallback finale: pista generica basata sulle prime due cifre del codice
+  const fallback = [{ name: '09/27', hdg: 90, label: '09/27' }];
+  rwyCache[icao] = fallback;
+  return fallback;
+}
+
+function renderCrosswindWidget(wdir, wspd, wgst, runways) {
+  const el = document.getElementById('cw-widget');
+  if (!el) return;
+
+  // Usa le piste passate o quelle correnti
+  if (runways) {
+    currentRwyAll  = runways;
+    currentRwyHdg   = runways[0].hdg;
+    currentRwyLabel = runways[0].label;
+  }
+
+  if (wdir == null || wspd == null || (wdir === 0 && wspd === 0)) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:12px;text-align:center;padding:8px">
+      Vento calma — nessuna componente significativa.</div>`;
+    return;
+  }
+
+  const RWY_HDG = currentRwyHdg;
+
+  // Selettore pista (se più di una)
+  const rwySelector = currentRwyAll.length > 1
+    ? `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+        ${currentRwyAll.map((rwy, i) => `
+          <button onclick="selectRunway(${i},${wdir},${wspd},${wgst||'null'})"
+            style="flex:1;padding:6px 10px;border-radius:10px;font-size:11px;font-weight:600;
+              font-family:'Outfit',sans-serif;cursor:pointer;
+              border:1px solid ${rwy.hdg===currentRwyHdg ? 'rgba(99,202,255,0.4)' : 'var(--border)'};
+              background:${rwy.hdg===currentRwyHdg ? 'rgba(99,202,255,0.12)' : 'var(--glass)'};
+              color:${rwy.hdg===currentRwyHdg ? '#63caff' : 'var(--muted)'}">
+            RWY ${rwy.label}
+          </button>`).join('')}
+      </div>`
+    : '';
+
+  // Calcolo componenti
+  const rad = Math.PI / 180;
+  const relAngle = ((wdir - RWY_HDG) + 360) % 360;
+  const relRad   = relAngle * rad;
+  const headwind  = Math.round(wspd * Math.cos(relRad));
+  const crosswind = Math.round(Math.abs(wspd * Math.sin(relRad)));
+  const cwDir     = Math.sin(relRad) >= 0 ? 'D→' : '←S';
+  let cwGust = null, hwGust = null;
+  if (wgst) {
+    cwGust = Math.round(Math.abs(wgst * Math.sin(relRad)));
+    hwGust = Math.round(wgst * Math.cos(relRad));
+  }
+
+  const cwColor = crosswind < 10 ? 'cw-ok' : crosswind < 15 ? 'cw-warn' : 'cw-crit';
+  const hwLabel = headwind >= 0 ? '⬆ Vento contrario' : '⬇ Vento in coda';
+  const hwColor = headwind < 0 ? 'cw-warn' : 'cw-ok';
+
+  // Canvas
+  const size = 130;
+  const cx = size / 2, cy = size / 2, r = 50;
+  const windFromAngle = (wdir - 90) * rad;
+  const wxEnd = cx + r * Math.cos(windFromAngle);
+  const wyEnd = cy + r * Math.sin(windFromAngle);
+  const rwyAngle1 = (RWY_HDG - 90) * rad;
+  const rwyAngle2 = (RWY_HDG + 180 - 90) * rad;
+  const rx1 = cx + (r + 2) * Math.cos(rwyAngle1);
+  const ry1 = cy + (r + 2) * Math.sin(rwyAngle1);
+  const rx2 = cx + (r + 2) * Math.cos(rwyAngle2);
+  const ry2 = cy + (r + 2) * Math.sin(rwyAngle2);
+
+  // Label pista: numero corto (es. "15" e "33")
+  const parts = currentRwyLabel.split('/');
+  const lbl1 = parts[0] || '??';
+  const lbl2 = parts[1] || '??';
+
+  el.innerHTML = `
+    ${rwySelector}
+    <div class="cw-main">
+      <div class="cw-canvas-wrap">
+        <canvas id="cw-canvas" width="${size}" height="${size}"></canvas>
+      </div>
+      <div class="cw-stats">
+        <div class="cw-stat">
+          <div class="cw-stat-label">💨 Crosswind (${cwDir})</div>
+          <div class="cw-stat-val ${cwColor}">${crosswind} kt${cwGust ? ' / ' + cwGust + ' kt' : ''}</div>
+        </div>
+        <div class="cw-stat">
+          <div class="cw-stat-label">${hwLabel}</div>
+          <div class="cw-stat-val ${hwColor}">${Math.abs(headwind)} kt${hwGust ? ' / ' + Math.abs(hwGust) + ' kt' : ''}</div>
+        </div>
+        <div class="cw-stat">
+          <div class="cw-stat-label">🌬 Vento rilevato</div>
+          <div class="cw-stat-val" style="font-size:14px;color:var(--text)">${wdir}° / ${wspd} kt${wgst ? ' (raffica ' + wgst + ' kt)' : ''}</div>
+        </div>
+      </div>
+    </div>
+    <div class="cw-limits">
+      <div class="cw-limit">
+        <div class="cw-limit-label">Limite XW leggeri</div>
+        <div class="cw-limit-val ${crosswind < 15 ? 'cw-ok' : 'cw-crit'}">15 kt — ${crosswind < 15 ? '✓ OK' : '✗ OLTRE'}</div>
+      </div>
+      <div class="cw-limit">
+        <div class="cw-limit-label">Limite XW ICAO</div>
+        <div class="cw-limit-val ${crosswind < 20 ? 'cw-ok' : 'cw-crit'}">20 kt — ${crosswind < 20 ? '✓ OK' : '✗ OLTRE'}</div>
+      </div>
+      <div class="cw-limit">
+        <div class="cw-limit-label">Pista attiva</div>
+        <div class="cw-limit-val" style="color:#63caff">RWY ${headwind >= 0 ? lbl1 : lbl2}</div>
+      </div>
+    </div>
+  `;
+
+  // Disegna canvas
+  setTimeout(() => {
+    const canvas = document.getElementById('cw-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.stroke();
+    [r*0.5, r*0.25].forEach(rr => {
+      ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 2*Math.PI);
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.stroke();
+    });
+    ctx.beginPath(); ctx.moveTo(rx1, ry1); ctx.lineTo(rx2, ry2);
+    ctx.strokeStyle = 'rgba(99,202,255,0.6)'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.stroke();
+
+    // Etichette pista dentro il cerchio
+    ctx.font = 'bold 10px Outfit'; ctx.fillStyle = '#63caff';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const labelR = r - 12;
+    ctx.fillText(lbl1, cx + labelR * Math.cos(rwyAngle1), cy + labelR * Math.sin(rwyAngle1));
+    ctx.fillText(lbl2, cx + labelR * Math.cos(rwyAngle2), cy + labelR * Math.sin(rwyAngle2));
+
+    // Freccia vento
+    const arrowColor = crosswind < 10 ? '#4ade80' : crosswind < 15 ? '#fbbf24' : '#f87171';
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(wxEnd, wyEnd);
+    ctx.strokeStyle = arrowColor; ctx.lineWidth = 2.5; ctx.stroke();
+    const ang = Math.atan2(wyEnd - cy, wxEnd - cx);
+    ctx.beginPath();
+    ctx.moveTo(wxEnd, wyEnd);
+    ctx.lineTo(wxEnd - 8*Math.cos(ang-0.4), wyEnd - 8*Math.sin(ang-0.4));
+    ctx.lineTo(wxEnd - 8*Math.cos(ang+0.4), wyEnd - 8*Math.sin(ang+0.4));
+    ctx.closePath(); ctx.fillStyle = arrowColor; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 2*Math.PI);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
+
+    // Cardinali
+    ctx.font = '9px Outfit'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('N', cx, 8); ctx.fillText('S', cx, size-8);
+    ctx.fillText('E', size-6, cy); ctx.fillText('O', 6, cy);
+  }, 50);
+}
+
+function selectRunway(idx, wdir, wspd, wgst) {
+  if (!currentRwyAll[idx]) return;
+  currentRwyHdg   = currentRwyAll[idx].hdg;
+  currentRwyLabel = currentRwyAll[idx].label;
+  renderCrosswindWidget(wdir, wspd, wgst || null);
 }
 
 function metarSearch() {
@@ -2974,8 +3242,11 @@ function renderMetarResult(m, taf, icao) {
     ${tafHTML}
     <div class="last-updated" style="margin:4px 16px 12px">Fonte: NOAA Aviation Weather Center · aviationweather.gov</div>
   `;
-  // Dopo aver renderizzato il METAR, avvia subito i satelliti GNSS
+  // Dopo aver renderizzato il METAR, carica piste e widget crosswind
   renderGpsSatCard();
+  fetchRunways(icao).then(runways => {
+    renderCrosswindWidget(m.wdir, m.wspd, m.wgst || null, runways);
+  });
 }
 
 // ============================================================
