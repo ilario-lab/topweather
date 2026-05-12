@@ -1675,10 +1675,48 @@ async function fetchWeather() {
 
 // ── ALLERTE via Open-Meteo (dati MeteoAlarm EUMETNET) ──
 async function fetchAlerts() {
+  // Fetch dati previsione per derivare allerte sintetiche
   const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&forecast_days=3&daily=weather_code,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,precipitation_probability_max,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min`);
   if (!r.ok) throw new Error('Alert N/D');
-  return r.json();
+
+  // Tenta anche Meteoalarm CAP (API ufficiale europea, CORS permesso)
+  let officialAlerts = [];
+  try {
+    const cap = await fetch(
+      `https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-italy`,
+      { signal: AbortSignal.timeout(4000) }
+    );
+    if (cap.ok) {
+      const xml = await cap.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xml, 'application/xml');
+      const entries = doc.querySelectorAll('entry');
+      entries.forEach(entry => {
+        const title   = entry.querySelector('title')?.textContent || '';
+        const summary = entry.querySelector('summary')?.textContent || '';
+        const cap_sev = (summary.match(/severity[:\s]+(\w+)/i)?.[1] || '').toLowerCase();
+        const cap_evt = (summary.match(/event[:\s]+([^\n<]+)/i)?.[1] || title).trim();
+        if (!cap_evt) return;
+        const sev = cap_sev === 'extreme' ? 'sev-extreme'
+                  : cap_sev === 'severe'  ? 'sev-severe'
+                  : cap_sev === 'moderate'? 'sev-moderate' : 'sev-minor';
+        officialAlerts.push({
+          sev, icon: '🚨',
+          title: `⚡ Allerta Ufficiale: ${cap_evt}`,
+          desc: summary.replace(/<[^>]+>/g,'').slice(0,120) + '...',
+          detail: summary.replace(/<[^>]+>/g,'').slice(0,300),
+          day: 'Meteoalarm',
+          official: true,
+        });
+      });
+    }
+  } catch(e) { /* silenzioso */ }
+
+  return { forecast: await r.json(), officialAlerts };
 }
+
+// Override deriveAlerts per gestire il nuovo formato
+const _origDeriveAlerts = deriveAlerts;
 
 // Genera allerte sintetiche dai dati Open-Meteo
 function deriveAlerts(data) {
@@ -1885,14 +1923,16 @@ function render(weatherData, marineData, pollenData) {
   const now = new Date();
   const nowHour = now.getHours();
 
-  const sunrise0 = d.sunrise[0]; // es. "2026-04-21T06:12"
+  const sunrise0 = d.sunrise[0];
   const sunset0  = d.sunset[0];
 
-  // Icona corrente con controllo notte
   const currentIcon = getIcon(c.weather_code, now.toISOString(), sunrise0, sunset0);
 
   const currentIdx = h.time.findIndex(t => new Date(t).getHours()===nowHour);
   const start = currentIdx>=0 ? currentIdx : 0;
+
+  // Allerte da window._lastAlerts (già popolato prima di render)
+  const alerts = window._lastAlerts || [];
   const hourSlots = [];
   for(let i=start;i<Math.min(start+8,h.time.length);i++){
     // Per ogni slot orario scegli l'alba/tramonto del giorno giusto
@@ -1908,25 +1948,30 @@ function render(weatherData, marineData, pollenData) {
     });
   }
 
-  // Allerte inline
-  const alerts = window._lastAlerts || [];
+  // Allerte — fuori dalla card, sopra tutto
   const alertsInlineHTML = alerts.length ? `
-    <div style="margin-top:14px;display:flex;flex-direction:column;gap:7px;">
-      ${alerts.map((a,i)=>`
-        <div class="alert-banner ${a.sev}" onclick="toggleAlertDetail('inline-${i}')" style="margin:0;border-radius:16px">
-          <div class="alert-icon" style="font-size:20px">${a.icon}</div>
-          <div class="alert-body">
-            <div class="alert-title" style="font-size:12px">${a.title}</div>
-            <div class="alert-desc" style="font-size:11px">${a.desc}</div>
+    <div style="padding:0 16px;margin-bottom:12px">
+      <div style="font-size:9.5px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;
+        color:var(--danger);opacity:0.9;margin-bottom:8px">⚠️ Allerte Meteo Attive · ${alerts.length}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${alerts.map((a,i)=>`
+          <div class="alert-banner ${a.sev}" onclick="toggleAlertDetail('inline-${i}')" style="margin:0">
+            <div class="alert-icon" style="font-size:22px">${a.icon}</div>
+            <div class="alert-body">
+              <div class="alert-title">${a.title}</div>
+              <div class="alert-desc">${a.desc}</div>
+              <div class="alert-meta">${alertSevLabel(a.sev)} · Tocca per dettagli</div>
+            </div>
+            <div class="alert-chevron">›</div>
           </div>
-          <div class="alert-chevron">›</div>
-        </div>
-        <div class="alert-detail" id="alert-detail-inline-${i}">${a.detail}</div>
-      `).join('')}
+          <div class="alert-detail" id="alert-detail-inline-${i}">${a.detail}</div>
+        `).join('')}
+      </div>
     </div>` : '';
 
   // METEO panel
   const meteoHTML = `
+    ${alertsInlineHTML}
     <div class="main-card">
       <div class="current-top">
         <div>
@@ -1937,7 +1982,6 @@ function render(weatherData, marineData, pollenData) {
       </div>
       <div class="condition">${wmo.label}</div>
       <div class="date-time">${formatDate(now)} · ${now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>
-      ${alertsInlineHTML}
       <div class="card-divider"></div>
       <div class="stats-row">
         <div class="stat-item"><div class="stat-icon">💧</div><div class="stat-value">${c.relative_humidity_2m}%</div><div class="stat-label">Umidità</div></div>
@@ -2063,7 +2107,13 @@ async function load() {
       fetchWeather(), fetchMarine(), fetchPollen(), fetchAlerts()
     ]);
     if (weather.status==='rejected') throw new Error('Meteo non disponibile');
-    const alerts = alertData.status==='fulfilled' ? deriveAlerts(alertData.value) : [];
+    let alerts = [];
+    if (alertData.status === 'fulfilled') {
+      const { forecast, officialAlerts } = alertData.value;
+      const derived = deriveAlerts(forecast);
+      // Le allerte ufficiali vanno prima
+      alerts = [...(officialAlerts || []), ...derived];
+    }
     window._lastAlerts = alerts;
     render(weather.value, marine.status==='fulfilled'?marine.value:null, pollen.status==='fulfilled'?pollen.value:null);
   } catch(e) {
@@ -2799,8 +2849,6 @@ function renderMetarShell() {
     <div id="metar-body"><div class="loading"><div class="loading-icon">📡</div><div class="loading-text">Carico dati...</div></div></div>
 
     <!-- Widget crosswind nativo -->
-    <div style="padding:0 16px 6px;font-size:9.5px;font-weight:600;letter-spacing:2.5px;
-      text-transform:uppercase;color:#63caff;opacity:0.85;margin-top:4px">💨 Crosswind — Pista 15/33</div>
     <div class="cw-wrap" id="cw-widget">
       <div style="color:var(--muted);font-size:12px;text-align:center;padding:8px 0">
         In attesa dei dati METAR...
@@ -2946,6 +2994,8 @@ function renderCrosswindWidget(wdir, wspd, wgst, runways) {
   const lbl2 = parts[1] || '??';
 
   el.innerHTML = `
+    <div style="font-size:9.5px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;
+      color:#63caff;opacity:0.85;margin-bottom:12px">💨 Crosswind — Pista ${currentRwyLabel}</div>
     ${rwySelector}
     <div class="cw-main">
       <div class="cw-canvas-wrap">
