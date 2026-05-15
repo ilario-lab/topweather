@@ -1728,86 +1728,104 @@ function deriveAlerts(data) {
   for (let i = 0; i < Math.min(3, d.time.length); i++) {
     const date = new Date(d.time[i]);
     const dayName = i===0 ? 'Oggi' : i===1 ? 'Domani' : DAYS_IT[date.getDay()];
-    const wind = d.wind_speed_10m_max?.[i] ?? 0;
-    const gusts = d.wind_gusts_10m_max?.[i] ?? 0;
-    const rain = d.precipitation_sum?.[i] ?? 0;
+    const wind   = d.wind_speed_10m_max?.[i] ?? 0;
+    const gusts  = d.wind_gusts_10m_max?.[i] ?? 0;
+    const rain   = d.precipitation_sum?.[i] ?? 0;
     const rainProb = d.precipitation_probability_max?.[i] ?? 0;
-    const code = d.weather_code?.[i] ?? 0;
-    const tMax = d.temperature_2m_max?.[i] ?? null;
-    const tMin = d.temperature_2m_min?.[i] ?? null;
+    const code   = d.weather_code?.[i] ?? 0;
+    const tMax   = d.temperature_2m_max?.[i] ?? null;
+    const tMin   = d.temperature_2m_min?.[i] ?? null;
     const appMax = d.apparent_temperature_max?.[i] ?? tMax;
     const appMin = d.apparent_temperature_min?.[i] ?? tMin;
 
-    // 🌡️ Caldo estremo
-    if (tMax !== null && tMax >= 36) {
+    // 🌡️ Caldo estremo — soglia abbassata a 33°C
+    if (tMax !== null && tMax >= 33) {
       const sev = tMax >= 42 ? 'sev-extreme' : tMax >= 40 ? 'sev-severe' : tMax >= 38 ? 'sev-moderate' : 'sev-minor';
       alerts.push({
         sev, icon: '🌡️',
-        title: `Caldo ${tMax>=40?'estremo':'intenso'} — ${dayName}`,
+        title: `Caldo ${tMax>=38?'estremo':'intenso'} — ${dayName}`,
         desc: `Temperatura massima: ${tMax.toFixed(0)}°C. Percepita: ${appMax!==null?appMax.toFixed(0)+'°C':'-'}.`,
-        detail: `Temp. max: ${tMax.toFixed(1)}°C · Percepita max: ${appMax!==null?appMax.toFixed(1)+'°C':'-'}. Evitare l'esposizione al sole nelle ore centrali (12–16). Bere acqua frequentemente. Attenzione a anziani, bambini e animali.`,
+        detail: `Temp. max: ${tMax.toFixed(1)}°C · Percepita: ${appMax!==null?appMax.toFixed(1)+'°C':'-'}. Evitare esposizione al sole nelle ore centrali (12–16). Idratarsi frequentemente.`,
         day: dayName,
       });
     }
 
-    // 🥶 Freddo intenso
-    if (tMin !== null && tMin <= -2) {
+    // 🥶 Freddo intenso — soglia a 2°C
+    if (tMin !== null && tMin <= 2) {
       const sev = tMin <= -10 ? 'sev-severe' : tMin <= -5 ? 'sev-moderate' : 'sev-minor';
       alerts.push({
         sev, icon: '🥶',
-        title: `Freddo intenso — ${dayName}`,
+        title: `Freddo${tMin<0?' intenso':' in arrivo'} — ${dayName}`,
         desc: `Temperatura minima: ${tMin.toFixed(0)}°C. Percepita: ${appMin!==null?appMin.toFixed(0)+'°C':'-'}.`,
-        detail: `Temp. min: ${tMin.toFixed(1)}°C · Percepita min: ${appMin!==null?appMin.toFixed(1)+'°C':'-'}. Possibile formazione di ghiaccio su strade e marciapiedi. Coprirsi adeguatamente.`,
+        detail: `Temp. min: ${tMin.toFixed(1)}°C · Percepita: ${appMin!==null?appMin.toFixed(1)+'°C':'-'}. ${tMin<0?'Possibile formazione di ghiaccio. ':''}Coprirsi adeguatamente.`,
         day: dayName,
       });
     }
 
-    // ⛈️ Temporale
-    if ([95,96,99].includes(code)) {
-      const sev = code===99 ? 'sev-severe' : 'sev-moderate';
+    // ⛈️ Temporale — aggiunto codice 80-82 (rovesci) e 91-92 (pioggia + temporale)
+    const isThunder = [95,96,99].includes(code);
+    const isShower  = [80,81,82].includes(code);
+    const isMixed   = [91,92].includes(code);
+    if (isThunder || isShower || isMixed) {
+      const sev = code===99 ? 'sev-severe' : code===96||code===82 ? 'sev-moderate' : 'sev-minor';
+      const label = isThunder ? `Temporale${code===99?' con grandine':''}` : isShower ? 'Rovesci intensi' : 'Pioggia e temporali';
       alerts.push({
-        sev, icon: '⛈️',
-        title: `Temporale${code===99?' con grandine':''} — ${dayName}`,
-        desc: `Previsti temporali${code===99?' con possibile grandine':''}.${rain>0?' Accumulo stimato: '+rain.toFixed(1)+' mm.':''}`,
-        detail: `Codice WMO: ${code}. Precipitazioni: ${rain.toFixed(1)} mm. Probabilità: ${rainProb}%. Raffiche: ${gusts.toFixed(0)} km/h.`,
+        sev, icon: isThunder ? '⛈️' : '🌧️',
+        title: `${label} — ${dayName}`,
+        desc: `${label} previsti.${rain>0?' Accumulo stimato: '+rain.toFixed(1)+' mm.':''} Prob: ${rainProb}%.`,
+        detail: `Codice WMO: ${code}. Precipitazioni: ${rain.toFixed(1)} mm. Probabilità: ${rainProb}%. Raffiche: ${gusts.toFixed(0)} km/h. Prestare attenzione a fulmini e colpi di vento.`,
         day: dayName,
       });
     }
-    // 💨 Vento forte
-    if (gusts >= 75 || wind >= 50) {
+
+    // 💨 Vento forte — soglie abbassate: raffica 50 km/h o vento 40 km/h
+    if (gusts >= 50 || wind >= 40) {
       const sev = gusts >= 100 ? 'sev-severe' : gusts >= 75 ? 'sev-moderate' : 'sev-minor';
       alerts.push({
         sev, icon: '💨',
-        title: `Vento forte — ${dayName}`,
+        title: `Vento ${gusts>=75?'forte':'sostenuto'} — ${dayName}`,
         desc: `Vento: ${wind.toFixed(0)} km/h, raffiche fino a ${gusts.toFixed(0)} km/h.`,
-        detail: `Vento sostenuto: ${wind.toFixed(0)} km/h. Raffiche massime: ${gusts.toFixed(0)} km/h. Prestare attenzione alla navigazione e alla guida.`,
+        detail: `Vento sostenuto: ${wind.toFixed(0)} km/h. Raffiche massime: ${gusts.toFixed(0)} km/h. Attenzione alla navigazione, alla guida e agli oggetti esposti.`,
         day: dayName,
       });
     }
-    // 🌧️ Pioggia intensa
-    if (rain >= 40) {
-      const sev = rain >= 80 ? 'sev-severe' : 'sev-moderate';
+
+    // 🌧️ Pioggia intensa — soglia abbassata a 20 mm
+    if (rain >= 20 && !isThunder && !isShower && !isMixed) {
+      const sev = rain >= 80 ? 'sev-severe' : rain >= 50 ? 'sev-moderate' : 'sev-minor';
       alerts.push({
         sev, icon: '🌧️',
-        title: `Pioggia intensa — ${dayName}`,
-        desc: `Accumulo previsto: ${rain.toFixed(1)} mm. Rischio allagamenti.`,
-        detail: `Precipitazioni totali: ${rain.toFixed(1)} mm. Probabilità: ${rainProb}%. Possibili allagamenti locali e difficoltà alla viabilità.`,
+        title: `Pioggia ${rain>=50?'intensa':'abbondante'} — ${dayName}`,
+        desc: `Accumulo previsto: ${rain.toFixed(1)} mm. ${rain>=50?'Rischio allagamenti.':''}`,
+        detail: `Precipitazioni totali: ${rain.toFixed(1)} mm. Probabilità: ${rainProb}%. ${rain>=50?'Possibili allagamenti locali e difficoltà alla viabilità.':'Portare l\'ombrello.'}`,
         day: dayName,
       });
     }
-    // ❄️ Neve (codici 71-77)
+
+    // ❄️ Neve
     if ([71,73,75,77].includes(code)) {
       const sev = code>=75 ? 'sev-severe' : 'sev-moderate';
       alerts.push({
         sev, icon: '❄️',
-        title: `Neve — ${dayName}`,
+        title: `Neve${code>=75?' abbondante':''} — ${dayName}`,
         desc: `Previste nevicate${code>=75?' abbondanti':''}.`,
         detail: `Codice WMO: ${code}. Possibili disagi alla viabilità. Verificare le condizioni stradali.`,
         day: dayName,
       });
     }
+
+    // 🌫️ Nebbia
+    if ([45,48].includes(code)) {
+      alerts.push({
+        sev: 'sev-minor', icon: '🌫️',
+        title: `Nebbia — ${dayName}`,
+        desc: 'Possibile visibilità ridotta.',
+        detail: 'Nebbia prevista. Ridurre la velocità e aumentare la distanza di sicurezza.',
+        day: dayName,
+      });
+    }
   }
-  // sort by severity
+
   const order = {'sev-extreme':0,'sev-severe':1,'sev-moderate':2,'sev-minor':3};
   return alerts.sort((a,b) => (order[a.sev]??4) - (order[b.sev]??4));
 }
