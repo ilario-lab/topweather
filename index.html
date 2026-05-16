@@ -3236,13 +3236,25 @@ function renderMetarResult(m, taf, icao) {
 
   // Sky condition
   const skyMap = { SKC:'Cielo libero', CLR:'Cielo libero', FEW:'Poche nuvole', SCT:'Nuvolosità variabile', BKN:'Molto nuvoloso', OVC:'Coperto', VV:'Visibilità verticale' };
-  const skyChips = (m.clouds || []).map(c =>
-    `<span class="metar-sky-chip">${skyMap[c.cover]||c.cover} ${c.base != null ? c.base*100+'\'' : ''}</span>`
-  ).join('');
+  const skyChips = (m.clouds || []).map(c => {
+    // aviationweather.gov: c.base è in centinaia di piedi (es. 25 = 2500 ft)
+    // Ma alcuni proxy potrebbero restituirlo già in piedi interi
+    // Heuristica: se base < 1000 è quasi certamente in centinaia di ft
+    const raw = parseFloat(c.base);
+    if (c.base == null || isNaN(raw)) {
+      return `<span class="metar-sky-chip">${skyMap[c.cover]||c.cover}</span>`;
+    }
+    const ftVal = raw < 1000 ? raw * 100 : raw; // centinaia → piedi
+    const mVal  = Math.round(ftVal * 0.3048);
+    return `<span class="metar-sky-chip">${skyMap[c.cover]||c.cover} · ${ftVal.toLocaleString('it-IT')} ft (${mVal} m)</span>`;
+  }).join('');
 
-  // Ceiling for flight rules
+  // Ceiling for flight rules (in feet)
   const bknovc = (m.clouds||[]).filter(c=>['BKN','OVC','VV'].includes(c.cover));
-  const ceil = bknovc.length ? Math.min(...bknovc.map(c=>c.base*100)) : 99999;
+  const ceil = bknovc.length ? Math.min(...bknovc.map(c => {
+    const raw = parseFloat(c.base);
+    return isNaN(raw) ? 99999 : (raw < 1000 ? raw * 100 : raw);
+  })) : 99999;
   const [fr, frClass] = flightRule(m.visib || 99, ceil);
 
   // Orario
