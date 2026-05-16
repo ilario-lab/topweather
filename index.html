@@ -3069,8 +3069,8 @@ function renderCrosswindWidget(wdir, wspd, wgst, runways) {
     ctx.font = 'bold 10px Outfit'; ctx.fillStyle = '#63caff';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const labelR = r - 12;
-    ctx.fillText(lbl1, cx + labelR * Math.cos(rwyAngle1), cy + labelR * Math.sin(rwyAngle1));
-    ctx.fillText(lbl2, cx + labelR * Math.cos(rwyAngle2), cy + labelR * Math.sin(rwyAngle2));
+    ctx.fillText(lbl2, cx + labelR * Math.cos(rwyAngle1), cy + labelR * Math.sin(rwyAngle1));
+    ctx.fillText(lbl1, cx + labelR * Math.cos(rwyAngle2), cy + labelR * Math.sin(rwyAngle2));
 
     // Freccia vento
     const arrowColor = crosswind < 10 ? '#4ade80' : crosswind < 15 ? '#fbbf24' : '#f87171';
@@ -5019,4 +5019,3 @@ function renderEffemeridi() {
 
 </body>
 </html>
-
