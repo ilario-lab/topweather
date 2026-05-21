@@ -582,6 +582,10 @@
   }
   .splash-icon { font-size: 68px; animation: splashFloat 2.2s ease-in-out infinite; }
   @keyframes splashFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+  @keyframes installPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(160,130,255,0); }
+    50%      { box-shadow: 0 0 0 6px rgba(160,130,255,0.3); }
+  }
   .splash-title {
     font-family: 'Cormorant Garamond', serif;
     font-size: 36px; font-weight: 600; letter-spacing: -0.5px;
@@ -1097,6 +1101,9 @@
       <div class="suggestions" id="suggestions" style="display:none"></div>
     </div>
     <button class="geo-btn" onclick="doGeo()" title="Usa la mia posizione">📍</button>
+    <button class="geo-btn" id="pwa-install-btn" onclick="installPWA()"
+      title="Installa app" style="display:none;background:rgba(160,130,255,0.15);
+      border-color:rgba(160,130,255,0.35);font-size:16px">⬇️</button>
   </div>
   <div class="geo-loading" id="geoStatus"></div>
 
@@ -1453,11 +1460,39 @@ function renderAllQuakes(kpHTML = '') {
     </div>
     <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapWorld"></div></div>
     <div class="quake-list" id="quake-world-list"></div>
-    <div class="last-updated" id="quake-world-footer" style="padding:8px 0 16px"></div>
+    <div class="last-updated" id="quake-world-footer" style="padding:8px 0 4px"></div>
+
+    <div style="height:4px"></div>
+
+    <!-- ── INCENDI ── -->
+    <div class="quake-section-title" style="margin-top:4px">
+      <span class="quake-section-icon">🔥</span>
+      <div>
+        <div class="quake-section-label">Incendi Attivi — Europa & Mediterraneo</div>
+        <div class="quake-section-sub">Fonte: EFFIS Copernicus · MODIS/VIIRS · ~3h delay</div>
+      </div>
+      <button class="quake-refresh-mini" onclick="initFireSection()">⟳</button>
+    </div>
+    <div style="display:flex;gap:6px;padding:0 16px 10px;overflow-x:auto;scrollbar-width:none" id="fire-filter-row">
+      <div class="quake-filter active" onclick="setFireArea('med',this)">🌊 Mediterraneo</div>
+      <div class="quake-filter" onclick="setFireArea('italy',this)">🇮🇹 Italia</div>
+      <div class="quake-filter" onclick="setFireArea('europe',this)">🌍 Europa</div>
+    </div>
+    <div class="quake-map-wrap" style="margin-bottom:10px;height:260px"><div id="fireMap" style="height:100%"></div></div>
+    <div id="fire-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 16px;margin-bottom:10px">
+      <div class="iss-stat"><div class="iss-stat-val" id="fire-count" style="color:#f87171">—</div><div class="iss-stat-label">Hotspot attivi</div></div>
+      <div class="iss-stat"><div class="iss-stat-val" id="fire-frp" style="color:#fbbf24">—</div><div class="iss-stat-label">FRP max (MW)</div></div>
+      <div class="iss-stat"><div class="iss-stat-val" id="fire-updated" style="font-size:11px;color:var(--teal)">—</div><div class="iss-stat-label">Ultimo dato</div></div>
+    </div>
+    <div class="quake-list" id="fire-list" style="padding-bottom:4px"></div>
+    <div class="last-updated" id="fire-footer" style="padding:6px 0 16px">
+      Dati: EFFIS Copernicus · European Commission JRC · Licenza libera
+    </div>
   `;
 
   updateSectionIT();
   updateSectionWorld();
+  setTimeout(initFireSection, 200);
 }
 
 // ── Aggiorna sezione Italia (lista + mappa) ──────────────────
@@ -5269,6 +5304,193 @@ async function fetchJWSTData() {
 }
 
 
+// ============================================================
+// INCENDI — EFFIS Copernicus (WMS + GeoJSON, gratuito, no key)
+// ============================================================
+let fireMap = null;
+let fireMapInit = false;
+let fireArea = 'med';
+let fireHotspotLayer = null;
+let fireBurnedLayer  = null;
+
+const FIRE_AREAS = {
+  med:    { center:[38,14], zoom:5, bbox:'9,36,20,42',  label:'Mediterraneo' },
+  italy:  { center:[42,13], zoom:6, bbox:'6,36,19,47',  label:'Italia' },
+  europe: { center:[50,10], zoom:4, bbox:'-10,35,35,65', label:'Europa' },
+};
+
+// GeoJSON hotspot EFFIS (CORS aperto, dati pubblici Copernicus)
+const EFFIS_GEOJSON = (bbox) =>
+  `https://effis.jrc.ec.europa.eu/arcgis/rest/services/EFFIS_CEMS/ActiveFireHotspots/MapServer/0/query?where=1%3D1&geometry=${encodeURIComponent(bbox)}&geometryType=esriGeometryEnvelope&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&f=geojson&resultRecordCount=200&orderByFields=ACQDATE+DESC`;
+
+// WMS EFFIS layer incendi attivi (overlay su Leaflet)
+const EFFIS_WMS = 'https://maps.effis.emergency.copernicus.eu/effis';
+
+async function initFireSection() {
+  if (!document.getElementById('fireMap')) return;
+
+  // Inizializza mappa se non esiste
+  if (!fireMapInit) {
+    fireMapInit = true;
+    const area = FIRE_AREAS[fireArea];
+    fireMap = L.map('fireMap', {
+      center: area.center, zoom: area.zoom,
+      zoomControl: false, attributionControl: false,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png', {
+      maxZoom: 16, opacity: 0.85
+    }).addTo(fireMap);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png', {
+      maxZoom: 16, opacity: 0.55, zIndex: 600
+    }).addTo(fireMap);
+
+    // Layer WMS aree bruciate EFFIS (background colorato)
+    fireBurnedLayer = L.tileLayer.wms(EFFIS_WMS, {
+      layers: 'burnedAreas.2025',
+      format: 'image/png', transparent: true,
+      opacity: 0.55, zIndex: 400,
+    }).addTo(fireMap);
+  } else {
+    const area = FIRE_AREAS[fireArea];
+    fireMap.setView(area.center, area.zoom);
+    setTimeout(() => fireMap.invalidateSize(), 100);
+  }
+
+  // Carica hotspot GeoJSON
+  loadFireHotspots();
+}
+
+async function loadFireHotspots() {
+  const area = FIRE_AREAS[fireArea];
+  const countEl   = document.getElementById('fire-count');
+  const frpEl     = document.getElementById('fire-frp');
+  const updatedEl = document.getElementById('fire-updated');
+  const listEl    = document.getElementById('fire-list');
+  const footerEl  = document.getElementById('fire-footer');
+
+  if (countEl) countEl.textContent = '⌛';
+
+  // Rimuovi layer hotspot precedente
+  if (fireHotspotLayer && fireMap) {
+    fireMap.removeLayer(fireHotspotLayer);
+    fireHotspotLayer = null;
+  }
+
+  try {
+    const url = EFFIS_GEOJSON(area.bbox);
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const features = data.features || [];
+
+    // Statistiche
+    const count = features.length;
+    const frps  = features.map(f => parseFloat(f.properties?.FRP || f.properties?.frp || 0)).filter(v => !isNaN(v));
+    const maxFRP = frps.length ? Math.max(...frps).toFixed(1) : '—';
+    const dates  = features.map(f => f.properties?.ACQDATE || f.properties?.acqdate || '').filter(Boolean);
+    const lastDate = dates[0] || '—';
+
+    if (countEl)   countEl.textContent   = count.toLocaleString('it-IT');
+    if (frpEl)     frpEl.textContent     = maxFRP;
+    if (updatedEl) updatedEl.textContent = lastDate;
+
+    // Mappa — cerchi per hotspot colorati per intensità FRP
+    if (fireMap) {
+      const markers = features.map(f => {
+        const [lon, lat] = f.geometry.coordinates;
+        const frp   = parseFloat(f.properties?.FRP || f.properties?.frp || 0);
+        const color = frp > 500 ? '#ff2244' : frp > 100 ? '#ff6600' : frp > 20 ? '#fbbf24' : '#ffdd99';
+        const r     = Math.max(5, Math.min(16, 5 + frp / 80));
+        const m = L.circleMarker([lat, lon], {
+          radius: r, color, fillColor: color,
+          fillOpacity: 0.85, weight: 1,
+        });
+        const props = f.properties || {};
+        m.bindPopup(`<b>🔥 Hotspot</b><br>FRP: ${frp.toFixed(0)} MW<br>Data: ${props.ACQDATE||props.acqdate||'—'}<br>Satellite: ${props.SATELLITE||props.satellite||'—'}`);
+        return m;
+      });
+
+      fireHotspotLayer = L.layerGroup(markers).addTo(fireMap);
+    }
+
+    // Lista top 8 hotspot per FRP
+    const top = [...features]
+      .sort((a,b) => (parseFloat(b.properties?.FRP||0)) - (parseFloat(a.properties?.FRP||0)))
+      .slice(0, 8);
+
+    if (listEl) {
+      listEl.innerHTML = top.length === 0
+        ? `<div class="no-alerts" style="margin:0 16px 8px"><span style="font-size:22px">✅</span><div><div style="font-weight:600">Nessun hotspot rilevato</div><div style="font-size:11px;color:var(--muted)">Nessun incendio attivo nell'area selezionata.</div></div></div>`
+        : top.map(f => {
+            const p   = f.properties || {};
+            const frp = parseFloat(p.FRP || p.frp || 0);
+            const col = frp > 500 ? '#ff2244' : frp > 100 ? '#ff6600' : frp > 20 ? '#fbbf24' : '#ffdd99';
+            const country = p.COUNTRY || p.country || '—';
+            const date    = p.ACQDATE || p.acqdate || '—';
+            const sat     = p.SATELLITE || p.satellite || '—';
+            return `<div class="quake-row" style="cursor:default">
+              <div class="quake-mag" style="background:rgba(255,68,68,0.12);border:1px solid ${col}22;color:${col};font-size:12px;font-weight:700">
+                ${frp > 0 ? frp.toFixed(0) : '—'}
+              </div>
+              <div class="quake-info">
+                <div class="quake-place">🔥 ${country} · ${date}</div>
+                <div class="quake-meta">FRP: ${frp.toFixed(0)} MW · Satellite: ${sat}</div>
+              </div>
+              <div class="quake-depth" style="color:${col};font-size:11px">🔥</div>
+            </div>`;
+          }).join('');
+    }
+
+    if (footerEl) footerEl.textContent = `${count} hotspot · ${area.label} · EFFIS Copernicus JRC · Dati liberi`;
+
+  } catch(e) {
+    if (countEl)   countEl.textContent   = '—';
+    if (listEl)    listEl.innerHTML      = `<div class="error-msg">⚠️ EFFIS non raggiungibile: ${e.message}</div>`;
+    if (footerEl)  footerEl.textContent  = 'Errore dati EFFIS Copernicus';
+  }
+}
+
+function setFireArea(area, btn) {
+  fireArea = area;
+  document.querySelectorAll('#fire-filter-row .quake-filter').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  initFireSection();
+}
+
+
+let _deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.style.display = 'flex';
+});
+
+async function installPWA() {
+  if (!_deferredInstallPrompt) {
+    alert('Per installare:\n• Android Chrome → Menu ⋮ → "Installa app"\n• iOS Safari → Condividi 🔗 → "Aggiungi a schermata Home"');
+    return;
+  }
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.textContent = '⏳';
+  _deferredInstallPrompt.prompt();
+  const { outcome } = await _deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    if (btn) btn.style.display = 'none';
+    _deferredInstallPrompt = null;
+  } else {
+    if (btn) btn.textContent = '⬇️';
+  }
+}
+
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.style.display = 'none';
+  _deferredInstallPrompt = null;
+});
+
+// ============================================================
 let effInitialized = false;
 
 function initEffemeridi() {
