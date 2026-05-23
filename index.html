@@ -1299,8 +1299,8 @@ async function renderKpCard() {
 let quakeMapIT = null, quakeMapWorld = null;
 let quakeMarkersIT = [], quakeMarkersWorld = [];
 let allQuakesIT = [], allQuakesWorld = [];
-let quakeFilterIT = '1';   // default: 24h per Italia (più eventi leggeri)
-let quakeFilterWorld = '7'; // default: 7gg per Mondo (solo M4.5+)
+let quakeFilterIT = '1';   // default: 24h
+let quakeFilterWorld = '1'; // default: 24h
 
 function magClass(m) {
   if (m < 2.0) return 'mag-minor';
@@ -1415,7 +1415,7 @@ function renderAllQuakes(kpHTML = '') {
       <button class="quake-refresh-mini" onclick="initQuakes()">⟳</button>
     </div>
     <div class="quake-filter-row" id="filter-it">
-      ${[{l:'24 ore',v:'1'},{l:'7 giorni',v:'7'},{l:'30 giorni',v:'30'}]
+      ${[{l:'24 ore',v:'1'},{l:'48 ore',v:'2'},{l:'7 giorni',v:'7'}]
         .map(f=>`<div class="quake-filter ${quakeFilterIT===f.v?'active':''}" onclick="reloadIT('${f.v}')">${f.l}</div>`).join('')}
     </div>
     <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapIT"></div></div>
@@ -1434,7 +1434,7 @@ function renderAllQuakes(kpHTML = '') {
       <button class="quake-refresh-mini" onclick="initQuakes()">⟳</button>
     </div>
     <div class="quake-filter-row" id="filter-world">
-      ${[{l:'24 ore',v:'1'},{l:'7 giorni',v:'7'},{l:'30 giorni',v:'30'}]
+      ${[{l:'24 ore',v:'1'},{l:'48 ore',v:'2'},{l:'7 giorni',v:'7'}]
         .map(f=>`<div class="quake-filter ${quakeFilterWorld===f.v?'active':''}" onclick="reloadWorld('${f.v}')">${f.l}</div>`).join('')}
     </div>
     <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapWorld"></div></div>
@@ -1454,7 +1454,7 @@ function updateSectionIT() {
   const filterEl = document.getElementById('filter-it');
 
   if (filterEl) filterEl.innerHTML = [
-    {l:'24 ore',v:'1'},{l:'7 giorni',v:'7'},{l:'30 giorni',v:'30'}
+    {l:'24 ore',v:'1'},{l:'48 ore',v:'2'},{l:'7 giorni',v:'7'}
   ].map(f=>`<div class="quake-filter ${quakeFilterIT===f.v?'active':''}" onclick="reloadIT('${f.v}')">${f.l}</div>`).join('');
 
   if (listEl) listEl.innerHTML = quakeListHTML(allQuakesIT, 'IT');
@@ -1484,7 +1484,7 @@ function updateSectionWorld() {
   const filterEl = document.getElementById('filter-world');
 
   if (filterEl) filterEl.innerHTML = [
-    {l:'24 ore',v:'1'},{l:'7 giorni',v:'7'},{l:'30 giorni',v:'30'}
+    {l:'24 ore',v:'1'},{l:'48 ore',v:'2'},{l:'7 giorni',v:'7'}
   ].map(f=>`<div class="quake-filter ${quakeFilterWorld===f.v?'active':''}" onclick="reloadWorld('${f.v}')">${f.l}</div>`).join('');
 
   if (listEl) listEl.innerHTML = quakeListHTML(allQuakesWorld, 'WORLD');
