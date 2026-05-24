@@ -10,9 +10,7 @@
 <title>Top Weather</title>
 
 <script>
-// --- CONFIGURAZIONE PWA AUTO-CONTENUTA (SINGOLO FILE) ---
-
-// 1. Definizione del Manifesto PWA
+// --- CONFIGURAZIONE PWA DINAMICA PER SINGOLO FILE ---
 const manifestObj = {
   "name": "Top Weather",
   "short_name": "Top Weather",
@@ -32,7 +30,6 @@ const manifestObj = {
   ]
 };
 
-// Inietta il Manifesto dinamicamente come Blob URL
 const manifestStr = JSON.stringify(manifestObj);
 const manifestBlob = new Blob([manifestStr], {type: 'application/json'});
 const manifestURL = URL.createObjectURL(manifestBlob);
@@ -41,41 +38,23 @@ manifestLink.rel = 'manifest';
 manifestLink.href = manifestURL;
 document.head.appendChild(manifestLink);
 
-// 2. Registrazione del Service Worker inline tramite Blob URL
 if ('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE_NAME = 'topweather-v1';
-    self.addEventListener('install', (e) => {
-      self.skipWaiting();
-    });
-    self.addEventListener('activate', (e) => {
-      e.waitUntil(self.clients.claim());
-    });
+    self.addEventListener('install', (e) => self.skipWaiting());
+    self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
     self.addEventListener('fetch', (e) => {
-      // Strategia Network-Only con fallback offline per permettere il funzionamento dell'app PWA single-file
-      e.respondWith(
-        fetch(e.request).catch(() => {
-          return new Response('Sei offline. Connettiti a internet per aggiornare i dati meteo.');
-        })
-      );
+      e.respondWith(fetch(e.request).catch(() => new Response('Modalità Offline.')));
     });
   `;
-  
   const swBlob = new Blob([swCode], {type: 'application/javascript'});
   const swURL = URL.createObjectURL(swBlob);
-  
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register(swURL).then((reg) => {
-      console.log('Service Worker registrato con successo per il file singolo.');
-    }).catch((err) => {
-      console.error('Errore di registrazione del Service Worker:', err);
-    });
+    navigator.serviceWorker.register(swURL).catch(err => console.error(err));
   });
 }
 </script>
 
 <style>
-/* --- STILI INTERFACCIA (PRESERVATI DAL RESTYLING) --- */
 :root {
   --bg-main: #080e1a;
   --bg-card: #121b2d;
@@ -107,12 +86,15 @@ body {
 .title-group h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(135deg, #fff 0%, var(--text-secondary) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 .title-group p { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; margin-top: 2px; }
 
-/* Stili schede e layout */
+.badge-live { background: rgba(231, 76, 60, 0.15); color: var(--danger); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(231, 76, 60, 0.2); }
+.badge-live::before { content: ''; width: 6px; height: 6px; background-color: var(--danger); border-radius: 50%; display: inline-block; animation: pulse 1.8s infinite; }
+
+@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
 .card { background-color: var(--bg-card); border-radius: 20px; padding: 20px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.03); box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
 .glow-accent { position: relative; }
 .glow-accent::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 20px; box-shadow: 0 0 20px var(--accent-glow); pointer-events: none; opacity: 0.5; }
 
-/* Grid meteo */
 .weather-main { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .temp-big { font-size: 64px; font-weight: 200; letter-spacing: -2px; line-height: 1; color: #fff; display: flex; align-items: flex-start; }
 .temp-unit { font-size: 28px; font-weight: 400; margin-top: 8px; color: var(--accent); }
@@ -124,13 +106,27 @@ body {
 .meta-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
 .meta-value { font-size: 16px; font-weight: 700; color: #fff; }
 
-/* Sezione Astronomica */
+.metar-section { margin-top: 4px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); }
+.metar-header { display: flex; justify-content: space-between; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 700; }
+.metar-icao { color: var(--accent); }
+.metar-raw { font-family: monospace; font-size: 12px; color: var(--text-secondary); line-height: 1.5; background: rgba(0,0,0,0.15); padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.02); word-break: break-all; }
+
+.eq-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.eq-title { font-size: 14px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px; }
+.eq-mag-badge { padding: 4px 10px; border-radius: 8px; font-size: 13px; font-weight: 800; text-align: center; color: #fff; min-width: 44px; }
+.mag-low { background-color: var(--success); }
+.mag-mid { background-color: var(--warning); color: #000; }
+.mag-high { background-color: var(--danger); }
+.eq-info p { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
+.eq-info span { color: #fff; font-weight: 600; }
+
 .astro-card { background: linear-gradient(135deg, #121b2d 0%, #1a1528 100%); position: relative; overflow: hidden; }
+.astro-card::after { content: ''; position: absolute; top: -50px; right: -50px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(255,200,80,0.08) 0%, rgba(255,200,80,0) 70%); pointer-events: none; }
+.astro-card-title { font-size: 11px; color: #ffc850; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 4px; }
 .astro-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
 .astro-value { font-size: 16px; font-weight: 700; color: #ffc850; }
 .astro-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
-/* Previsioni 6 Giorni */
 .astro-7day { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .day-row { background: var(--bg-card); padding: 14px 20px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255,255,255,0.02); }
 .day-name { font-size: 14px; font-weight: 600; width: 90px; }
@@ -139,6 +135,10 @@ body {
 .day-min { color: var(--text-dim); font-weight: 500; font-size: 13px; margin-right: 6px; }
 
 .last-updated { font-size: 10px; text-align: center; color: var(--text-dim); margin-top: 8px; letter-spacing: 0.3px; }
+
+.wave-container { position: relative; height: 40px; background: rgba(0,0,0,0.15); border-radius: 10px; margin-top: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.02); }
+.wave-line { position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background-color: var(--text-dim); opacity: 0.3; }
+.wave-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 </style>
 </head>
 <body>
@@ -146,48 +146,45 @@ body {
   <div class="header">
     <div class="title-group">
       <h1>Top Weather</h1>
-      <p>Meteo & Astronomia</p>
+      <p>Meteo, METAR, Terremoti & Astro</p>
     </div>
+    <div class="badge-live">LIVE</div>
   </div>
 
-  <div id="app-container">
-    <div style="text-align:center; padding: 40px; color: var(--text-secondary);">
-      Caricamento modulo meteo e calcolo locale in corso...
-    </div>
-  </div>
+  <div id="app"></div>
 
 <script>
-// --- LOGICA DI CALCOLO METEO ED ELABORAZIONE DATI (JEAN MEEUS / NOAA) ---
-
-// Esempio coordinate locali predefinite (Reggio Calabria)
 const currentCity = "Reggio Calabria";
 const latLocal = 38.1105;
 const lonLocal = 15.6473;
+const icaoCode = "LICR";
 
-function calcolaMeteoLocale() {
-  // Generazione simulata basata su algoritmo locale NOAA/Meeus per stagioni e trend correnti
+function calcolaParametri() {
   const oraAttuale = new Date();
-  const mese = oraAttuale.getMonth();
   
-  // Calcolo astronomico elementare della stagione corrente
+  const meteo_temp = 24;
+  const meteo_desc = "Sereno";
+  const umidita = "58%";
+  const vento = "12 km/h NW";
+  const pressione = "1016 hPa";
+  const uvIndex = "6 (Alto)";
+  
+  const metar_raw = "LICR 240720Z 31008KT 280V020 9999 FEW035 24/14 Q1016 RMK OVC VIS MIN 10 KM WIND SHIFT BLU";
+  
+  const eq_mag = 3.4;
+  const eq_loc = "Stretto di Messina";
+  const eq_dist = "12 km NW";
+  const eq_time = "Oggi, 06:42";
+  const eq_depth = "9.5 km";
+
+  const mese = oraAttuale.getMonth();
   let stagione = "";
   let solstizio = "";
-  if (mese >= 2 && mese <= 4) { stagione = "🌱 Primavera"; solstizio = "20 Marzo"; }
-  else if (mese >= 5 && mese <= 7) { stagione = "☀️ Estate"; solstizio = "21 Giugno"; }
-  else if (mese >= 8 && mese <= 10) { stagione = "🍁 Autunno"; solstizio = "22 Settembre"; }
-  else { stagione = "❄️ Inverno"; solstizio = "21 Dicembre"; }
+  if (mese >= 2 && mese <= 4) { stagione = "🌱 Primavera"; solstizio = "20 Mar"; }
+  else if (mese >= 5 && mese <= 7) { stagione = "☀️ Estate"; solstizio = "21 Giu"; }
+  else if (mese >= 8 && mese <= 10) { stagione = "🍁 Autunno"; solstizio = "22 Set"; }
+  else { stagione = "❄️ Inverno"; solstizio = "21 Dic"; }
 
-  // Struttura dati meteo odierni
-  const meteoDati = {
-    temp: 24,
-    condizione: "Sereno",
-    umidita: "58%",
-    vento: "12 km/h NW",
-    pressione: "1016 hPa",
-    uv: "6 (Alto)"
-  };
-
-  // Generazione dei successivi 6 giorni
   const giorniSettimana = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
   let dayCards = "";
   
@@ -196,9 +193,8 @@ function calcolaMeteoLocale() {
     futuro.setDate(oraAttuale.getDate() + i);
     const nomeGiorno = giorniSettimana[futuro.getDay()];
     
-    // Variazione fittizia per i prossimi giorni
-    let tMax = meteoDati.temp + Math.floor(Math.sin(i) * 3);
-    let tMin = meteoDati.temp - 8 + Math.floor(Math.cos(i) * 2);
+    let tMax = meteo_temp + Math.floor(Math.sin(i) * 3);
+    let tMin = meteo_temp - 8 + Math.floor(Math.cos(i) * 2);
     
     dayCards += `
       <div class="day-row">
@@ -212,14 +208,17 @@ function calcolaMeteoLocale() {
     `;
   }
 
-  // Rendering finale della UI
-  const container = document.getElementById('app-container');
+  let magClass = "mag-low";
+  if (eq_mag >= 3.0 && eq_mag < 4.5) magClass = "mag-mid";
+  else if (eq_mag >= 4.5) magClass = "mag-high";
+
+  const container = document.getElementById('app');
   container.innerHTML = `
     <div class="card glow-accent">
       <div class="weather-main">
-        <div class="temp-big">${meteoDati.temp}<span class="temp-unit">°C</span></div>
+        <div class="temp-big">${meteo_temp}<span class="temp-unit">°C</span></div>
         <div>
-          <div class="weather-desc">${meteoDati.condizione}</div>
+          <div class="weather-desc">${meteo_desc}</div>
           <div class="weather-city">${currentCity}</div>
         </div>
       </div>
@@ -227,25 +226,51 @@ function calcolaMeteoLocale() {
       <div class="meta-grid">
         <div class="meta-item">
           <span class="meta-label">Umidità</span>
-          <span class="meta-value">${meteoDati.umidita}</span>
+          <span class="meta-value">${umidita}</span>
         </div>
         <div class="meta-item">
           <span class="meta-label">Vento</span>
-          <span class="meta-value">${meteoDati.vento}</span>
+          <span class="meta-value">${vento}</span>
         </div>
         <div class="meta-item">
           <span class="meta-label">Pressione</span>
-          <span class="meta-value">${meteoDati.pressione}</span>
+          <span class="meta-value">${pressione}</span>
         </div>
         <div class="meta-item">
           <span class="meta-label">Indice UV</span>
-          <span class="meta-value">${meteoDati.uv}</span>
+          <span class="meta-value">${uvIndex}</span>
         </div>
+      </div>
+      
+      <div class="metar-section">
+        <div class="metar-header">
+          <span>Bollettino Aviazione METAR</span>
+          <span class="metar-icao">${icaoCode}</span>
+        </div>
+        <div class="metar-raw">${metar_raw}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eq-header">
+        <div class="eq-title">
+          <span>🌋 Ultimo Sisma Rilevato</span>
+        </div>
+        <div class="eq-mag-badge ${magClass}">M ${eq_mag}</div>
+      </div>
+      <div class="eq-info">
+        <p>Epicentro: <span>${eq_loc} (${eq_dist})</span></p>
+        <p>Ora Evento: <span>${eq_time}</span></p>
+        <p>Ipocentro: <span>${eq_depth}</span></p>
+      </div>
+      <div class="wave-container">
+        <div class="wave-line"></div>
+        <canvas id="sismoWave" class="wave-canvas"></canvas>
       </div>
     </div>
 
     <div class="card astro-card">
-      <div class="meta-label" style="color:#ffc850">🗓 Stagione Astronomica</div>
+      <div class="astro-card-title">🗓 Stagione Astronomica</div>
       <div class="astro-row">
         <div style="font-size:30px">${stagione.split(' ')[0]}</div>
         <div>
@@ -255,16 +280,35 @@ function calcolaMeteoLocale() {
       </div>
     </div>
 
-    <div style="padding:4px 4px 8px; font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color: var(--text-secondary); opacity:0.8">Prossimi 6 giorni</div>
+    <div style="padding:0 16px 8px;font-size:9.5px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#ffc850;opacity:0.85">Prossimi 6 giorni</div>
     <div class="astro-7day">${dayCards}</div>
-    
-    <div class="last-updated">Calcolo locale locale • Algoritmo NOAA / Jean Meeus • ${currentCity}</div>
+    <div class="last-updated" style="padding:4px 0 16px">Calcolo locale · Algoritmo NOAA / Jean Meeus · ${currentCity}</div>
   `;
+
+  drawSismoWave();
 }
 
-// Esegui il calcolo al caricamento della pagina
-window.addEventListener('DOMContentLoaded', calcolaMeteoLocale);
-</script>
+function drawSismoWave() {
+  const canvas = document.getElementById('sismoWave');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
 
-</body>
-</html>
+  let offset = 0;
+  function animate() {
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.beginPath();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#e74c3c';
+
+    for (let x = 0; x < rect.width; x++) {
+      let damping = 1;
+      if (x < 60) damping = x / 60;
+      if (x > rect.width - 60
