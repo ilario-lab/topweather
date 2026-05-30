@@ -1,0 +1,71 @@
+name: Aggiorna TLE satelliti GNSS
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Ogni giorno alle 06:00 UTC
+  workflow_dispatch:       # Permette avvio manuale
+
+jobs:
+  update-tle:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Scarica TLE da Celestrak
+        run: |
+          mkdir -p tle
+          
+          # GPS
+          curl -s "https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle" -o tle/gps.tle
+          
+          # GLONASS
+          curl -s "https://celestrak.org/NORAD/elements/gp.php?GROUP=glo-ops&FORMAT=tle" -o tle/glonass.tle
+          
+          # Galileo
+          curl -s "https://celestrak.org/NORAD/elements/gp.php?GROUP=galileo&FORMAT=tle" -o tle/galileo.tle
+          
+          # BeiDou
+          curl -s "https://celestrak.org/NORAD/elements/gp.php?GROUP=beidou&FORMAT=tle" -o tle/beidou.tle
+          
+          # Converti TLE in JSON
+          python3 << 'PYEOF'
+          import json, os
+          
+          def parse_tle(filename):
+              with open(filename) as f:
+                  lines = [l.strip() for l in f.readlines() if l.strip()]
+              sats = []
+              for i in range(0, len(lines)-2, 3):
+                  name  = lines[i]
+                  line1 = lines[i+1]
+                  line2 = lines[i+2]
+                  if line1.startswith('1 ') and line2.startswith('2 '):
+                      sats.append({'name': name, 'line1': line1, 'line2': line2})
+              return sats
+          
+          files = {
+              'tle/gps.json':     'tle/gps.tle',
+              'tle/glonass.json': 'tle/glonass.tle',
+              'tle/galileo.json': 'tle/galileo.tle',
+              'tle/beidou.json':  'tle/beidou.tle',
+          }
+          
+          for out, inp in files.items():
+              if os.path.exists(inp):
+                  sats = parse_tle(inp)
+                  with open(out, 'w') as f:
+                      json.dump(sats, f)
+                  print(f'{out}: {len(sats)} satelliti')
+          PYEOF
+
+      - name: Commit e push TLE aggiornati
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tle/
+          git diff --staged --quiet || git commit -m "TLE aggiornati $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
