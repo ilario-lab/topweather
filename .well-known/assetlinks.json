@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "dev.workers.ilariomariani.topweather.twa",
+        "sha256_cert_fingerprints": ["C6:56:4E:47:68:99:8E:C7:DC:93:F8:70:06:20:CD:30:47:2F:64:BE:74:23:AE:36:25:D2:64:E2:5B:32:82:5E"]
+      }
+    }]
