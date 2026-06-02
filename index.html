@@ -1419,7 +1419,7 @@ function renderAllQuakes(kpHTML = '') {
       ${[{l:'24 ore',v:'1'},{l:'48 ore',v:'2'},{l:'7 giorni',v:'7'}]
         .map(f=>`<div class="quake-filter ${quakeFilterIT===f.v?'active':''}" onclick="reloadIT('${f.v}')">${f.l}</div>`).join('')}
     </div>
-    <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapIT"></div></div>
+    <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapIT" style="width:100%;height:200px"></div></div>
     <div class="quake-list" id="quake-it-list"></div>
     <div class="last-updated" id="quake-it-footer" style="padding:8px 0 4px"></div>
 
@@ -1438,7 +1438,7 @@ function renderAllQuakes(kpHTML = '') {
       ${[{l:'24 ore',v:'1'},{l:'48 ore',v:'2'},{l:'7 giorni',v:'7'}]
         .map(f=>`<div class="quake-filter ${quakeFilterWorld===f.v?'active':''}" onclick="reloadWorld('${f.v}')">${f.l}</div>`).join('')}
     </div>
-    <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapWorld"></div></div>
+    <div class="quake-map-wrap" style="margin-bottom:10px"><div id="quakeMapWorld" style="width:100%;height:200px"></div></div>
     <div class="quake-list" id="quake-world-list"></div>
     <div class="last-updated" id="quake-world-footer" style="padding:8px 0 4px"></div>
 
@@ -1475,7 +1475,8 @@ function updateSectionIT() {
         .addTo(quakeMapIT)
         .bindPopup(`<b>M${m.toFixed(1)}</b><br>${f.properties.place || ''}<br>Prof: ${f.geometry.coordinates[2]?.toFixed(0)} km`);
     });
-  }, 120);
+    quakeMapIT.invalidateSize();
+  }, 500);
 }
 
 // ── Aggiorna sezione Mondo (lista + mappa) ───────────────────
@@ -1505,7 +1506,8 @@ function updateSectionWorld() {
         .addTo(quakeMapWorld)
         .bindPopup(`<b>M${m.toFixed(1)}</b><br>${f.properties.place || ''}<br>Prof: ${f.geometry.coordinates[2]?.toFixed(0)} km`);
     });
-  }, 160);
+    quakeMapWorld.invalidateSize();
+  }, 600);
 }
 
 // ── Helper: colore per magnitudo ─────────────────────────────
