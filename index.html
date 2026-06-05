@@ -3505,27 +3505,27 @@ async function fetchMetar(icao) {
     }];
   };
 
-  // Strategia sequenziale: 1) AWC diretto → 2) CheckWeather (CORS nativo) → 3) corsproxy+allorigins
+  // Strategia: 1) CheckWeather (CORS nativo, funziona su WebView) → 2) AWC diretto → 3) proxy
   const fetchMetarData = async (awcUrl, cwUrl) => {
-    // 1. AWC diretto
+    // 1. CheckWeather API — prima scelta: CORS nativo, funziona su browser E WebView Android
     try {
-      const r = await ft(awcUrl, 7000);
-      if (r.ok) {
-        const d = await r.json();
-        if (Array.isArray(d) && d.length) return d;
-      }
-    } catch(_) {}
-
-    // 2. CheckWeather API — CORS nativo, nessun proxy
-    try {
-      const r = await ft(cwUrl, 8000);
+      const r = await ft(cwUrl, 8000, { mode: 'cors' });
       if (r.ok) {
         const d = await r.json();
         return normalizeCW(d);
       }
     } catch(_) {}
 
-    // 3. Proxy CORS su AWC come ultima risorsa
+    // 2. AWC diretto — funziona su browser desktop/mobile ma non sempre su WebView
+    try {
+      const r = await ft(awcUrl, 7000, { mode: 'cors' });
+      if (r.ok) {
+        const d = await r.json();
+        if (Array.isArray(d) && d.length) return d;
+      }
+    } catch(_) {}
+
+    // 3. Proxy CORS su AWC — ultima risorsa
     const proxyResult = await Promise.any([
       ft(`https://corsproxy.io/?url=${encodeURIComponent(awcUrl)}`, 10000)
         .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
