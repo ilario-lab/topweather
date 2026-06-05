@@ -1672,9 +1672,15 @@ async function doSearch() {
 function selectCity(lat, lon, name, region) {
   currentLat=lat; currentLon=lon; currentCity=name; currentRegion=region;
   document.getElementById('searchInput').value='';
-  astroInitialized = false; // ricalcola astronomia per nuova città
+  astroInitialized = false;
   effInitialized = false;
+  metarInitialized = false;
+  metarStationId = findNearestMetarStation(lat, lon);
   hideSuggestions(); updateHeader(); load();
+  // Se il tab METAR è già aperto, ricaricalo subito
+  if (activeTab === 'metar') {
+    setTimeout(() => { initMetar(); }, 50);
+  }
 }
 
 function updateHeader() {
@@ -3458,6 +3464,23 @@ function metarSearch() {
   if (v.length === 4) fetchMetar(v);
 }
 
+// Cache in memoria del file METAR statico
+let _metarStaticCache = null;
+let _metarStaticTs = 0;
+
+async function loadMetarStatic() {
+  // Cache 25 minuti (il file si aggiorna ogni 30)
+  if (_metarStaticCache && (Date.now() - _metarStaticTs < 25 * 60 * 1000)) {
+    return _metarStaticCache;
+  }
+  const url = 'https://ilario-lab.github.io/topweather/metar/data.json?t=' + Date.now();
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('File METAR non disponibile');
+  _metarStaticCache = await r.json();
+  _metarStaticTs = Date.now();
+  return _metarStaticCache;
+}
+
 async function fetchMetar(icao) {
   metarStationId = icao;
   const body = document.getElementById('metar-body');
@@ -3466,6 +3489,24 @@ async function fetchMetar(icao) {
 
   const METAR_URL = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
   const TAF_URL   = `https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`;
+
+  // Prima prova dal file statico GitHub (nessun CORS, sempre disponibile)
+  try {
+    const staticData = await loadMetarStatic();
+    const m = staticData.stations?.[icao];
+    if (m) {
+      // TAF lo prendiamo ancora da aviationweather (solo testo, fallback ok)
+      let t = null;
+      try {
+        const tr = await fetch(`https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`);
+        if (tr.ok) { const tj = await tr.json(); t = Array.isArray(tj) ? tj[0] : null; }
+      } catch(e) {}
+      renderMetarResult(m, t, icao);
+      return;
+    }
+  } catch(e) {
+    console.warn('File statico METAR non disponibile, uso API diretta:', e.message);
+  }
 
   // fetch con timeout via AbortController
   const ft = (url, ms=8000) => {
