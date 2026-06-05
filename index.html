@@ -3122,6 +3122,34 @@ const METAR_STATIONS = [
   { id:'LIRF', name:'Roma Fiumicino',   flag:'🇮🇹' },
 ];
 
+const METAR_DB = [
+  { id:'LICR', lat:38.071, lon:15.647 },{ id:'LICC', lat:37.467, lon:15.066 },
+  { id:'LICB', lat:36.994, lon:14.607 },{ id:'LIRF', lat:41.804, lon:12.251 },
+  { id:'LIRA', lat:41.953, lon:12.600 },{ id:'LIML', lat:45.445, lon:9.277  },
+  { id:'LIMC', lat:45.630, lon:8.723  },{ id:'LIPZ', lat:45.505, lon:12.352 },
+  { id:'LIPE', lat:44.535, lon:11.289 },{ id:'LIMF', lat:45.200, lon:7.650  },
+  { id:'LIRN', lat:40.886, lon:14.291 },{ id:'LIBD', lat:41.139, lon:16.761 },
+  { id:'LICJ', lat:38.176, lon:13.091 },{ id:'LIEE', lat:39.251, lon:9.054  },
+  { id:'LIPQ', lat:45.828, lon:13.472 },{ id:'LIME', lat:45.674, lon:9.704  },
+  { id:'LIRQ', lat:43.810, lon:11.205 },{ id:'EGLL', lat:51.477, lon:-0.461 },
+  { id:'LFPG', lat:49.009, lon:2.548  },{ id:'EDDF', lat:50.033, lon:8.571  },
+  { id:'LEMD', lat:40.472, lon:-3.561 },{ id:'EHAM', lat:52.310, lon:4.768  },
+  { id:'LSZH', lat:47.464, lon:8.549  },{ id:'LOWW', lat:48.110, lon:16.570 },
+  { id:'LKPR', lat:50.100, lon:14.260 },{ id:'EPWA', lat:52.166, lon:20.967 },
+  { id:'EKCH', lat:55.618, lon:12.656 },{ id:'UUEE', lat:55.972, lon:37.415 },
+  { id:'UKBB', lat:50.345, lon:30.894 },{ id:'LTFM', lat:41.262, lon:28.740 },
+  { id:'LGAV', lat:37.936, lon:23.947 },{ id:'LYBE', lat:44.818, lon:20.309 },
+];
+
+function findNearestMetarStation(lat, lon) {
+  let best = METAR_DB[0], bestD = Infinity;
+  for (const s of METAR_DB) {
+    const d = Math.hypot(s.lat - lat, s.lon - lon);
+    if (d < bestD) { bestD = d; best = s; }
+  }
+  return best.id;
+}
+
 function initMetar() {
   if (metarInitialized) return;
   metarInitialized = true;
@@ -3559,7 +3587,7 @@ async function fetchMetar(icao) {
     }
   };
 
-  const strategies = ['codetabs'];
+  const strategies = ['direct', 'codetabs', 'corsproxy', 'allorigins'];
 
   for (let i = 0; i < strategies.length; i++) {
     try {
