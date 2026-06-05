@@ -3467,86 +3467,60 @@ async function fetchMetar(icao) {
   const METAR_URL = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
   const TAF_URL   = `https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`;
 
-  // fetch con timeout via AbortController
-  const ft = (url, ms=8000) => {
+  const ft = (url, ms=10000) => {
     const c = new AbortController();
     const id = setTimeout(() => c.abort(), ms);
     return fetch(url, {signal: c.signal}).finally(() => clearTimeout(id));
   };
 
-  // Prova a parsare JSON in modo sicuro
-  const safeJson = async (res) => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  };
+  // Tenta tutti i proxy in parallelo — vince il primo che risponde
+  const fetchJsonAny = (url) => Promise.any([
+    // 1. Diretto (funziona se il browser non blocca CORS da file://)
+    ft(url, 6000)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
+    // 2. corsproxy.io
+    ft(`https://corsproxy.io/?url=${encodeURIComponent(url)}`, 10000)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
+    // 3. allorigins raw (restituisce il body grezzo)
+    ft(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 10000)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
+    // 4. allorigins get (wrappa in {contents: "..."})
+    ft(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, 10000)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { const p = JSON.parse(d.contents || '[]'); if (!Array.isArray(p) || !p.length) throw new Error('empty'); return p; }),
+    // 5. codetabs proxy
+    ft(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, 10000)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
+    // 6. thingproxy
+    ft(`https://thingproxy.freeboard.io/fetch/${url}`, 10000)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
+  ]);
 
-  // 4 strategie diverse — la prima che risponde vince
-  const tryStrategy = async (label) => {
-    if (label === 'direct') {
-      // Strategia 1: API diretta (funziona se il browser/CDN non blocca CORS)
-      const [m, t] = await Promise.all([
-        ft(METAR_URL, 6000).then(safeJson),
-        ft(TAF_URL, 6000).then(safeJson).catch(() => []),
-      ]);
-      return { m: Array.isArray(m) ? m[0] : null, t: Array.isArray(t) ? t[0] : null };
-    }
-    if (label === 'corsproxy') {
-      const P = 'https://corsproxy.io/?url=';
-      const [m, t] = await Promise.all([
-        ft(P + encodeURIComponent(METAR_URL), 9000).then(safeJson),
-        ft(P + encodeURIComponent(TAF_URL),   9000).then(safeJson).catch(() => []),
-      ]);
-      return { m: Array.isArray(m) ? m[0] : null, t: Array.isArray(t) ? t[0] : null };
-    }
-    if (label === 'allorigins') {
-      const P = 'https://api.allorigins.win/get?url=';
-      const [mr, tr] = await Promise.all([
-        ft(P + encodeURIComponent(METAR_URL), 10000).then(r => r.json()),
-        ft(P + encodeURIComponent(TAF_URL),   10000).then(r => r.json()).catch(() => ({contents:'[]'})),
-      ]);
-      const m = JSON.parse(mr.contents || '[]');
-      const t = JSON.parse(tr.contents || '[]');
-      return { m: Array.isArray(m) ? m[0] : null, t: Array.isArray(t) ? t[0] : null };
-    }
-    if (label === 'codetabs') {
-      const P = 'https://api.codetabs.com/v1/proxy?quest=';
-      const [m, t] = await Promise.all([
-        ft(P + encodeURIComponent(METAR_URL), 10000).then(safeJson),
-        ft(P + encodeURIComponent(TAF_URL),   10000).then(safeJson).catch(() => []),
-      ]);
-      return { m: Array.isArray(m) ? m[0] : null, t: Array.isArray(t) ? t[0] : null };
-    }
-  };
-
-  const strategies = ['codetabs'];
-
-  for (let i = 0; i < strategies.length; i++) {
-    try {
-      const result = await tryStrategy(strategies[i]);
-      if (!result.m) throw new Error('empty response');
-      renderMetarResult(result.m, result.t, icao);
-      return;
-    } catch (e) {
-      console.warn(`METAR strategy ${strategies[i]} failed:`, e.message);
-      if (i < strategies.length - 1) {
-        body.innerHTML = `<div class="loading">
-          <div class="loading-icon">📡</div>
-          <div class="loading-text">Fonte ${i+1} non disponibile, provo alternativa ${i+2}/${strategies.length}...</div>
-        </div>`;
-      }
-    }
+  try {
+    const [mArr, tArr] = await Promise.all([
+      fetchJsonAny(METAR_URL),
+      fetchJsonAny(TAF_URL).catch(() => []),
+    ]);
+    const m = Array.isArray(mArr) ? mArr[0] : null;
+    const t = Array.isArray(tArr) ? tArr[0] : null;
+    if (!m) throw new Error('Nessun dato per ' + icao);
+    renderMetarResult(m, t, icao);
+  } catch(e) {
+    body.innerHTML = `<div style="padding:20px 16px;text-align:center;color:var(--muted)">
+      <div style="font-size:28px">⚠️</div>
+      <div style="margin-top:8px;font-size:13px">Nessun servizio ha risposto per <b>${icao}</b>.<br>
+      <span style="font-size:11px;opacity:.7">Controlla il codice ICAO e la connessione, poi riprova.</span></div>
+      <button onclick="fetchMetar('${icao}')" style="margin-top:14px;padding:8px 20px;
+        border-radius:10px;border:none;background:var(--gold);color:#000;cursor:pointer;font-size:12px;font-weight:700">
+        ↺ Riprova
+      </button>
+    </div>`;
   }
-
-  // Tutte le fonti fallite
-  body.innerHTML = `<div style="padding:20px 16px;text-align:center;color:var(--muted)">
-    <div style="font-size:28px">⚠️</div>
-    <div style="margin-top:8px;font-size:13px">Nessun servizio ha risposto per <b>${icao}</b>.<br>
-    <span style="font-size:11px;opacity:.7">Controlla il codice ICAO e la connessione, poi riprova.</span></div>
-    <button onclick="fetchMetar('${icao}')" style="margin-top:14px;padding:8px 20px;
-      border-radius:10px;border:none;background:var(--gold);color:#000;cursor:pointer;font-size:12px;font-weight:700">
-      ↺ Riprova
-    </button>
-  </div>`;
 }
 
 function metarWxIcon(wx) {
