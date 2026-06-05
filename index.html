@@ -3464,47 +3464,86 @@ async function fetchMetar(icao) {
   if (!body) return;
   body.innerHTML = `<div class="loading"><div class="loading-icon">📡</div><div class="loading-text">Carico ${icao}...</div></div>`;
 
-  const METAR_URL = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
-  const TAF_URL   = `https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`;
+  const AWC_METAR = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
+  const AWC_TAF   = `https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`;
+  const CW_METAR  = `https://api.checkweather.com/v1/metar/${icao}`;
+  const CW_TAF    = `https://api.checkweather.com/v1/taf/${icao}`;
 
-  const ft = (url, ms=10000) => {
+  const ft = (url, ms = 10000, opts = {}) => {
     const c = new AbortController();
     const id = setTimeout(() => c.abort(), ms);
-    return fetch(url, {signal: c.signal}).finally(() => clearTimeout(id));
+    return fetch(url, { signal: c.signal, ...opts }).finally(() => clearTimeout(id));
   };
 
-  // Tenta tutti i proxy in parallelo — vince il primo che risponde
-  const fetchJsonAny = (url) => Promise.any([
-    // 1. Diretto (funziona se il browser non blocca CORS da file://)
-    ft(url, 6000)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
-    // 2. corsproxy.io
-    ft(`https://corsproxy.io/?url=${encodeURIComponent(url)}`, 10000)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
-    // 3. allorigins raw (restituisce il body grezzo)
-    ft(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 10000)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
-    // 4. allorigins get (wrappa in {contents: "..."})
-    ft(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, 10000)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d => { const p = JSON.parse(d.contents || '[]'); if (!Array.isArray(p) || !p.length) throw new Error('empty'); return p; }),
-    // 5. codetabs proxy
-    ft(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, 10000)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
-    // 6. thingproxy
-    ft(`https://thingproxy.freeboard.io/fetch/${url}`, 10000)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
-  ]);
+  // Normalizza risposta CheckWeather (oggetto singolo) in array compatibile con AWC
+  const normalizeCW = (d) => {
+    if (!d || typeof d !== 'object') throw new Error('empty');
+    // CheckWeather restituisce {raw_text, ...} — mappiamo nei campi AWC
+    const raw = d.raw_text || d.raw || '';
+    if (!raw) throw new Error('empty');
+    return [{
+      rawOb:       raw,
+      rawTAF:      d.raw_text || d.raw || '',
+      stationId:   d.station_id || d.icao || icao,
+      temp:        d.temp_c    != null ? d.temp_c    : (d.temperature != null ? d.temperature : null),
+      dewp:        d.dewpoint_c != null ? d.dewpoint_c : (d.dewpoint != null ? d.dewpoint : null),
+      wdir:        d.wind_dir_degrees != null ? d.wind_dir_degrees : (d.wind_direction != null ? d.wind_direction : null),
+      wspd:        d.wind_speed_kt != null ? d.wind_speed_kt : (d.wind_speed != null ? d.wind_speed : null),
+      wgst:        d.wind_gust_kt != null ? d.wind_gust_kt : (d.wind_gust != null ? d.wind_gust : null),
+      visib:       d.visibility_statute_mi != null ? d.visibility_statute_mi : (d.visibility != null ? d.visibility : null),
+      altim:       d.altim_in_hg != null ? Math.round(d.altim_in_hg * 33.8639) : (d.altimeter != null ? d.altimeter : null),
+      wxString:    d.wx_string || d.weather || '',
+      clouds:      (d.sky_condition || d.clouds || []).map(c => ({
+                     cover: c.sky_cover || c.cover || c.type || '',
+                     base:  c.cloud_base_ft_agl != null ? c.cloud_base_ft_agl / 100
+                          : c.base != null ? c.base : 0
+                   })),
+      flightRules: d.flight_category || d.flight_rules || '',
+      obsTime:     d.observation_time || d.time || '',
+      validTime:   d.valid_time_from || d.valid_from || '',
+      fcsts:       d.forecast || d.fcst || [],
+    }];
+  };
+
+  // Strategia sequenziale: 1) AWC diretto → 2) CheckWeather (CORS nativo) → 3) corsproxy+allorigins
+  const fetchMetarData = async (awcUrl, cwUrl) => {
+    // 1. AWC diretto
+    try {
+      const r = await ft(awcUrl, 7000);
+      if (r.ok) {
+        const d = await r.json();
+        if (Array.isArray(d) && d.length) return d;
+      }
+    } catch(_) {}
+
+    // 2. CheckWeather API — CORS nativo, nessun proxy
+    try {
+      const r = await ft(cwUrl, 8000);
+      if (r.ok) {
+        const d = await r.json();
+        return normalizeCW(d);
+      }
+    } catch(_) {}
+
+    // 3. Proxy CORS su AWC come ultima risorsa
+    const proxyResult = await Promise.any([
+      ft(`https://corsproxy.io/?url=${encodeURIComponent(awcUrl)}`, 10000)
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
+      ft(`https://api.allorigins.win/raw?url=${encodeURIComponent(awcUrl)}`, 10000)
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(d => { if (!Array.isArray(d) || !d.length) throw new Error('empty'); return d; }),
+      ft(`https://api.allorigins.win/get?url=${encodeURIComponent(awcUrl)}`, 10000)
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(d => { const p = JSON.parse(d.contents || '[]'); if (!Array.isArray(p) || !p.length) throw new Error('empty'); return p; }),
+    ]);
+    return proxyResult;
+  };
 
   try {
     const [mArr, tArr] = await Promise.all([
-      fetchJsonAny(METAR_URL),
-      fetchJsonAny(TAF_URL).catch(() => []),
+      fetchMetarData(AWC_METAR, CW_METAR),
+      fetchMetarData(AWC_TAF, CW_TAF).catch(() => []),
     ]);
     const m = Array.isArray(mArr) ? mArr[0] : null;
     const t = Array.isArray(tArr) ? tArr[0] : null;
