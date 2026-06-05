@@ -1672,15 +1672,9 @@ async function doSearch() {
 function selectCity(lat, lon, name, region) {
   currentLat=lat; currentLon=lon; currentCity=name; currentRegion=region;
   document.getElementById('searchInput').value='';
-  astroInitialized = false;
+  astroInitialized = false; // ricalcola astronomia per nuova città
   effInitialized = false;
-  metarInitialized = false;
-  metarStationId = findNearestMetarStation(lat, lon);
   hideSuggestions(); updateHeader(); load();
-  // Se il tab METAR è già aperto, ricaricalo subito
-  if (activeTab === 'metar') {
-    setTimeout(() => { initMetar(); }, 50);
-  }
 }
 
 function updateHeader() {
