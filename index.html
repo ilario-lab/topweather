@@ -3122,34 +3122,6 @@ const METAR_STATIONS = [
   { id:'LIRF', name:'Roma Fiumicino',   flag:'🇮🇹' },
 ];
 
-const METAR_DB = [
-  { id:'LICR', lat:38.071, lon:15.647 },{ id:'LICC', lat:37.467, lon:15.066 },
-  { id:'LICB', lat:36.994, lon:14.607 },{ id:'LIRF', lat:41.804, lon:12.251 },
-  { id:'LIRA', lat:41.953, lon:12.600 },{ id:'LIML', lat:45.445, lon:9.277  },
-  { id:'LIMC', lat:45.630, lon:8.723  },{ id:'LIPZ', lat:45.505, lon:12.352 },
-  { id:'LIPE', lat:44.535, lon:11.289 },{ id:'LIMF', lat:45.200, lon:7.650  },
-  { id:'LIRN', lat:40.886, lon:14.291 },{ id:'LIBD', lat:41.139, lon:16.761 },
-  { id:'LICJ', lat:38.176, lon:13.091 },{ id:'LIEE', lat:39.251, lon:9.054  },
-  { id:'LIPQ', lat:45.828, lon:13.472 },{ id:'LIME', lat:45.674, lon:9.704  },
-  { id:'LIRQ', lat:43.810, lon:11.205 },{ id:'EGLL', lat:51.477, lon:-0.461 },
-  { id:'LFPG', lat:49.009, lon:2.548  },{ id:'EDDF', lat:50.033, lon:8.571  },
-  { id:'LEMD', lat:40.472, lon:-3.561 },{ id:'EHAM', lat:52.310, lon:4.768  },
-  { id:'LSZH', lat:47.464, lon:8.549  },{ id:'LOWW', lat:48.110, lon:16.570 },
-  { id:'LKPR', lat:50.100, lon:14.260 },{ id:'EPWA', lat:52.166, lon:20.967 },
-  { id:'EKCH', lat:55.618, lon:12.656 },{ id:'UUEE', lat:55.972, lon:37.415 },
-  { id:'UKBB', lat:50.345, lon:30.894 },{ id:'LTFM', lat:41.262, lon:28.740 },
-  { id:'LGAV', lat:37.936, lon:23.947 },{ id:'LYBE', lat:44.818, lon:20.309 },
-];
-
-function findNearestMetarStation(lat, lon) {
-  let best = METAR_DB[0], bestD = Infinity;
-  for (const s of METAR_DB) {
-    const d = Math.hypot(s.lat - lat, s.lon - lon);
-    if (d < bestD) { bestD = d; best = s; }
-  }
-  return best.id;
-}
-
 function initMetar() {
   if (metarInitialized) return;
   metarInitialized = true;
@@ -3492,23 +3464,6 @@ function metarSearch() {
   if (v.length === 4) fetchMetar(v);
 }
 
-// Cache in memoria del file METAR statico
-let _metarStaticCache = null;
-let _metarStaticTs = 0;
-
-async function loadMetarStatic() {
-  // Cache 25 minuti (il file si aggiorna ogni 30)
-  if (_metarStaticCache && (Date.now() - _metarStaticTs < 25 * 60 * 1000)) {
-    return _metarStaticCache;
-  }
-  const url = './metar/data.json?t=' + Date.now();
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('File METAR non disponibile');
-  _metarStaticCache = await r.json();
-  _metarStaticTs = Date.now();
-  return _metarStaticCache;
-}
-
 async function fetchMetar(icao) {
   metarStationId = icao;
   const body = document.getElementById('metar-body');
@@ -3517,24 +3472,6 @@ async function fetchMetar(icao) {
 
   const METAR_URL = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
   const TAF_URL   = `https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`;
-
-  // Prima prova dal file statico GitHub (nessun CORS, sempre disponibile)
-  try {
-    const staticData = await loadMetarStatic();
-    const m = staticData.stations?.[icao];
-    if (m) {
-      // TAF lo prendiamo ancora da aviationweather (solo testo, fallback ok)
-      let t = null;
-      try {
-        const tr = await fetch(`https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`);
-        if (tr.ok) { const tj = await tr.json(); t = Array.isArray(tj) ? tj[0] : null; }
-      } catch(e) {}
-      renderMetarResult(m, t, icao);
-      return;
-    }
-  } catch(e) {
-    console.warn('File statico METAR non disponibile, uso API diretta:', e.message);
-  }
 
   // fetch con timeout via AbortController
   const ft = (url, ms=8000) => {
@@ -3587,7 +3524,7 @@ async function fetchMetar(icao) {
     }
   };
 
-  const strategies = ['direct', 'codetabs', 'corsproxy', 'allorigins'];
+  const strategies = ['codetabs'];
 
   for (let i = 0; i < strategies.length; i++) {
     try {
@@ -3858,10 +3795,10 @@ const TLE_CACHE_KEY = 'gnss_tle_cache';
 const TLE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 ore
 
 const CELESTRAK_URLS = {
-  GPS:     './tle/gps.json',
-  GLONASS: './tle/glonass.json',
-  GALILEO: './tle/galileo.json',
-  BEIDOU:  './tle/beidou.json',
+  GPS:     'https://ilario-lab.github.io/topweather/tle/gps.json',
+  GLONASS: 'https://ilario-lab.github.io/topweather/tle/glonass.json',
+  GALILEO: 'https://ilario-lab.github.io/topweather/tle/galileo.json',
+  BEIDOU:  'https://ilario-lab.github.io/topweather/tle/beidou.json',
 };
 
 function parseCelestrakJSON(jsonData) {
