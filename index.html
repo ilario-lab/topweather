@@ -3464,10 +3464,11 @@ async function fetchMetar(icao) {
   if (!body) return;
   body.innerHTML = `<div class="loading"><div class="loading-icon">📡</div><div class="loading-text">Carico ${icao}...</div></div>`;
 
-  const AWC_METAR = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
-  const AWC_TAF   = `https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`;
-  const CW_METAR  = `https://api.checkweather.com/v1/metar/${icao}`;
-  const CW_TAF    = `https://api.checkweather.com/v1/taf/${icao}`;
+  // CheckWX proxied via Cloudflare Worker (chiave API mai esposta nel sorgente)
+  const WORKER_METAR = `https://checkwx-proxy.ilario-lab.workers.dev/metar/${icao}`;
+  const WORKER_TAF   = `https://checkwx-proxy.ilario-lab.workers.dev/taf/${icao}`;
+  const AWC_METAR    = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
+  const AWC_TAF      = `https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`;
 
   const ft = (url, ms = 10000, opts = {}) => {
     const c = new AbortController();
@@ -3475,48 +3476,63 @@ async function fetchMetar(icao) {
     return fetch(url, { signal: c.signal, ...opts }).finally(() => clearTimeout(id));
   };
 
-  // Normalizza risposta CheckWeather (oggetto singolo) in array compatibile con AWC
-  const normalizeCW = (d) => {
-    if (!d || typeof d !== 'object') throw new Error('empty');
-    // CheckWeather restituisce {raw_text, ...} — mappiamo nei campi AWC
-    const raw = d.raw_text || d.raw || '';
-    if (!raw) throw new Error('empty');
+  // Normalizza risposta CheckWX (api.checkwxapi.com decoded) in formato compatibile con AWC
+  const normalizeCheckWX = (d, isTaf = false) => {
+    if (!d || !d.data || !d.data.length) throw new Error('empty');
+    const s = d.data[0];
+    if (isTaf) {
+      return [{
+        rawTAF:    s.raw_text || '',
+        stationId: s.icao || icao,
+        validTime: s.period ? s.period.from : '',
+        fcsts:     (s.forecast || []).map(f => ({
+          timeFrom: f.change && f.change.period ? f.change.period.from : '',
+          timeTo:   f.change && f.change.period ? f.change.period.to   : '',
+          wdir:     f.wind ? f.wind.degrees : null,
+          wspd:     f.wind && f.wind.speed ? f.wind.speed.kts : null,
+          wgst:     f.wind && f.wind.gust  ? f.wind.gust.kts  : null,
+          visib:    f.visibility ? f.visibility.miles : null,
+          wxString: (f.conditions || []).map(c => c.code).join(' '),
+          clouds:   (f.clouds || []).map(c => ({ cover: c.code, base: c.base_feet_agl ? c.base_feet_agl/100 : 0 })),
+        })),
+      }];
+    }
+    const wind = s.wind || {};
+    const vis  = s.visibility || {};
+    const pres = s.pressure || {};
+    const tmp  = s.temperature || {};
+    const dew  = s.dewpoint || {};
     return [{
-      rawOb:       raw,
-      rawTAF:      d.raw_text || d.raw || '',
-      stationId:   d.station_id || d.icao || icao,
-      temp:        d.temp_c    != null ? d.temp_c    : (d.temperature != null ? d.temperature : null),
-      dewp:        d.dewpoint_c != null ? d.dewpoint_c : (d.dewpoint != null ? d.dewpoint : null),
-      wdir:        d.wind_dir_degrees != null ? d.wind_dir_degrees : (d.wind_direction != null ? d.wind_direction : null),
-      wspd:        d.wind_speed_kt != null ? d.wind_speed_kt : (d.wind_speed != null ? d.wind_speed : null),
-      wgst:        d.wind_gust_kt != null ? d.wind_gust_kt : (d.wind_gust != null ? d.wind_gust : null),
-      visib:       d.visibility_statute_mi != null ? d.visibility_statute_mi : (d.visibility != null ? d.visibility : null),
-      altim:       d.altim_in_hg != null ? Math.round(d.altim_in_hg * 33.8639) : (d.altimeter != null ? d.altimeter : null),
-      wxString:    d.wx_string || d.weather || '',
-      clouds:      (d.sky_condition || d.clouds || []).map(c => ({
-                     cover: c.sky_cover || c.cover || c.type || '',
-                     base:  c.cloud_base_ft_agl != null ? c.cloud_base_ft_agl / 100
-                          : c.base != null ? c.base : 0
-                   })),
-      flightRules: d.flight_category || d.flight_rules || '',
-      obsTime:     d.observation_time || d.time || '',
-      validTime:   d.valid_time_from || d.valid_from || '',
-      fcsts:       d.forecast || d.fcst || [],
+      rawOb:       s.raw_text || '',
+      stationId:   s.icao || icao,
+      temp:        tmp.celsius != null ? tmp.celsius : null,
+      dewp:        dew.celsius != null ? dew.celsius : null,
+      wdir:        wind.degrees != null ? wind.degrees : null,
+      wspd:        wind.speed && wind.speed.kts != null ? wind.speed.kts : null,
+      wgst:        wind.gust  && wind.gust.kts  != null ? wind.gust.kts  : null,
+      visib:       vis.miles != null ? vis.miles : null,
+      altim:       pres.mb != null ? pres.mb : null,
+      wxString:    (s.conditions || []).map(c => c.code).join(' '),
+      clouds:      (s.clouds || []).map(c => ({ cover: c.code, base: c.base_feet_agl ? c.base_feet_agl/100 : 0 })),
+      flightRules: s.flight_category || '',
+      obsTime:     s.observed || '',
     }];
   };
 
-  // Strategia: 1) CheckWeather (CORS nativo, funziona su WebView) → 2) AWC diretto → 3) proxy
-  const fetchMetarData = async (awcUrl, cwUrl) => {
-    // 1. CheckWeather API — prima scelta: CORS nativo, funziona su browser E WebView Android
+  // Strategia: 1) CheckWX API key (CORS nativo, perfetto su Android WebView)
+  //            2) AWC diretto (browser OK, WebView spesso bloccato)
+  //            3) Proxy CORS su AWC — ultima risorsa
+  const fetchMetarData = async (awcUrl, workerUrl, isTaf = false) => {
+    // 1. Worker CheckWX — chiave sicura lato server, CORS nativo, funziona su WebView
     try {
-      const r = await ft(cwUrl, 8000, { mode: 'cors' });
+      const r = await ft(workerUrl, 8000, { mode: 'cors' });
       if (r.ok) {
         const d = await r.json();
-        return normalizeCW(d);
+        return normalizeCheckWX(d, isTaf);
       }
     } catch(_) {}
 
-    // 2. AWC diretto — funziona su browser desktop/mobile ma non sempre su WebView
+    // 2. AWC diretto
     try {
       const r = await ft(awcUrl, 7000, { mode: 'cors' });
       if (r.ok) {
@@ -3525,7 +3541,7 @@ async function fetchMetar(icao) {
       }
     } catch(_) {}
 
-    // 3. Proxy CORS su AWC — ultima risorsa
+    // 3. Proxy CORS su AWC
     const proxyResult = await Promise.any([
       ft(`https://corsproxy.io/?url=${encodeURIComponent(awcUrl)}`, 10000)
         .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -3542,8 +3558,8 @@ async function fetchMetar(icao) {
 
   try {
     const [mArr, tArr] = await Promise.all([
-      fetchMetarData(AWC_METAR, CW_METAR),
-      fetchMetarData(AWC_TAF, CW_TAF).catch(() => []),
+      fetchMetarData(AWC_METAR, WORKER_METAR, false),
+      fetchMetarData(AWC_TAF,   WORKER_TAF,   true).catch(() => []),
     ]);
     const m = Array.isArray(mArr) ? mArr[0] : null;
     const t = Array.isArray(tArr) ? tArr[0] : null;
