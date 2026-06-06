@@ -3465,8 +3465,8 @@ async function fetchMetar(icao) {
   body.innerHTML = `<div class="loading"><div class="loading-icon">📡</div><div class="loading-text">Carico ${icao}...</div></div>`;
 
   // CheckWX proxied via Cloudflare Worker (chiave API mai esposta nel sorgente)
-  const WORKER_METAR = `https://checkwx-proxy.ilario-lab.workers.dev/metar/${icao}`;
-  const WORKER_TAF   = `https://checkwx-proxy.ilario-lab.workers.dev/taf/${icao}`;
+  const WORKER_METAR = `https://checkwx-proxy.ilariomariani.workers.dev/metar/${icao}`;
+  const WORKER_TAF   = `https://checkwx-proxy.ilariomariani.workers.dev/taf/${icao}`;
   const AWC_METAR    = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
   const AWC_TAF      = `https://aviationweather.gov/api/data/taf?ids=${icao}&format=json`;
 
