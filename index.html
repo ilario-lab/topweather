@@ -1592,31 +1592,51 @@ self.addEventListener('fetch', e => {
 }
 registerPWA();
 
+async function applyPosition(pos) {
+  currentLat = pos.coords.latitude;
+  currentLon = pos.coords.longitude;
+  setGeoStatus('');
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLon}&format=json&accept-language=it`);
+    const j = await r.json();
+    const addr = j.address || {};
+    currentCity = addr.city || addr.town || addr.village || addr.county || 'La tua posizione';
+    currentRegion = [addr.state||'', addr.country||''].filter(Boolean).join(', ');
+  } catch(e) {
+    currentCity = 'La tua posizione';
+    currentRegion = `${currentLat.toFixed(2)}°N ${currentLon.toFixed(2)}°E`;
+  }
+  updateHeader(); load();
+}
+
 function doGeo() {
   if (!navigator.geolocation) { setGeoStatus('Geolocalizzazione non supportata', true); return; }
   setGeoStatus('🔍 Rilevamento posizione...');
+
+  // Fase 1: posizione rapida (rete/IP, nessuna cache), max 8s
   navigator.geolocation.getCurrentPosition(
-    async pos => {
-      currentLat = pos.coords.latitude;
-      currentLon = pos.coords.longitude;
-      setGeoStatus('');
-      try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLon}&format=json&accept-language=it`);
-        const j = await r.json();
-        const addr = j.address || {};
-        currentCity = addr.city || addr.town || addr.village || addr.county || 'La tua posizione';
-        currentRegion = [addr.state||'', addr.country||''].filter(Boolean).join(', ');
-      } catch(e) {
-        currentCity = 'La tua posizione';
-        currentRegion = `${currentLat.toFixed(2)}°N ${currentLon.toFixed(2)}°E`;
-      }
-      updateHeader(); load();
+    pos => {
+      applyPosition(pos);
+      // Fase 2: affina con GPS ad alta precisione (in background, senza bloccare)
+      navigator.geolocation.getCurrentPosition(
+        pos2 => { if (pos2.coords.accuracy < pos.coords.accuracy) applyPosition(pos2); },
+        () => {},
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
     },
     err => {
-      const msgs = {1:'Accesso negato',2:'Posizione non disponibile',3:'Timeout'};
-      setGeoStatus('⚠️ ' + (msgs[err.code]||'Errore'), true);
+      // Fase 1 fallita → prova direttamente GPS ad alta precisione
+      setGeoStatus('🔍 Rilevamento GPS...');
+      navigator.geolocation.getCurrentPosition(
+        pos => applyPosition(pos),
+        err2 => {
+          const msgs = {1:'Accesso negato',2:'Posizione non disponibile',3:'Timeout GPS'};
+          setGeoStatus('⚠️ ' + (msgs[err2.code]||'Errore'), true);
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
     },
-    {timeout:10000, enableHighAccuracy:true}
+    { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
   );
 }
 
@@ -2324,7 +2344,30 @@ function setRadarType(type, el) {
   loadRadarFrames();
 }
 
-load();
+// Auto-geolocalizzazione all'avvio: tenta posizione reale, poi load()
+(function autoGeoOnStart() {
+  if (!navigator.geolocation) { load(); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      currentLat = pos.coords.latitude;
+      currentLon = pos.coords.longitude;
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLon}&format=json&accept-language=it`)
+        .then(r => r.json())
+        .then(j => {
+          const addr = j.address || {};
+          currentCity = addr.city || addr.town || addr.village || addr.county || 'La tua posizione';
+          currentRegion = [addr.state||'', addr.country||''].filter(Boolean).join(', ');
+        })
+        .catch(() => {
+          currentCity = 'La tua posizione';
+          currentRegion = `${currentLat.toFixed(2)}°N ${currentLon.toFixed(2)}°E`;
+        })
+        .finally(() => { updateHeader(); load(); });
+    },
+    () => { load(); }, // permesso negato o errore → carica con coordinate default
+    { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+  );
+})();
 
 // ============================================================
 // GFS 850 hPa — Open-Meteo (parametri corretti, griglia ridotta)
