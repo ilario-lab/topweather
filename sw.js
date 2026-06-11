@@ -1,4 +1,4 @@
-const CACHE = 'topweather-v4';
+const CACHE = 'topweather-v5';
 const ASSETS = ['./'];
 
 self.addEventListener('install', e => {
@@ -17,6 +17,15 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+
+  // Lascia passare senza intercettare le chiamate verso API esterne
+  // (open-meteo, marine-api, nominatim, rainviewer, ecc.)
+  // Il SW gestisce solo gli asset della propria origine (HTML/CSS/JS/icone).
+  const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) {
+    return; // non chiamare respondWith: la richiesta passa diretta alla rete
+  }
+
   e.respondWith(
     fetch(e.request)
       .then(resp => {
