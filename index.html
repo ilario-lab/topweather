@@ -1703,7 +1703,7 @@ function updateHeader() {
 }
 
 async function fetchWeather() {
-  const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,uv_index&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,wind_speed_10m_max&forecast_days=7&wind_speed_unit=kmh`);
+  const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,uv_index&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,wind_speed_10m_max&forecast_days=7&wind_speed_unit=kmh`, { signal: AbortSignal.timeout(12000) });
   if (!r.ok) throw new Error('Meteo non disponibile');
   return r.json();
 }
@@ -1711,7 +1711,7 @@ async function fetchWeather() {
 // ── ALLERTE via Open-Meteo (dati MeteoAlarm EUMETNET) ──
 async function fetchAlerts() {
   // Fetch dati previsione per derivare allerte sintetiche
-  const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&forecast_days=3&daily=weather_code,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,precipitation_probability_max,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min`);
+  const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&forecast_days=3&daily=weather_code,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,precipitation_probability_max,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min`, { signal: AbortSignal.timeout(12000) });
   if (!r.ok) throw new Error('Alert N/D');
 
   // Tenta anche Meteoalarm CAP (API ufficiale europea, CORS permesso)
@@ -1916,13 +1916,13 @@ function toggleAlertDetail(i) {
 }
 
 async function fetchMarine() {
-  const r = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=wave_height,wave_direction,wave_period,wind_wave_height,swell_wave_height,sea_surface_temperature&hourly=wave_height,sea_surface_temperature&forecast_days=2`);
+  const r = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=wave_height,wave_direction,wave_period,wind_wave_height,swell_wave_height,sea_surface_temperature&hourly=wave_height,sea_surface_temperature&forecast_days=2`, { signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error('Mare N/D');
   return r.json();
 }
 
 async function fetchPollen() {
-  const r = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&forecast_days=1`);
+  const r = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&forecast_days=1`, { signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error('Pollini N/D');
   return r.json();
 }
@@ -2156,9 +2156,13 @@ function render(weatherData, marineData, pollenData) {
 async function load() {
   document.getElementById('weather-content').innerHTML = `<div class="loading"><div class="loading-icon">🌀</div><div class="loading-text">Caricamento...</div></div>`;
   try {
-    const [weather, marine, pollen, alertData] = await Promise.allSettled([
+    let [weather, marine, pollen, alertData] = await Promise.allSettled([
       fetchWeather(), fetchMarine(), fetchPollen(), fetchAlerts()
     ]);
+    // Retry singolo automatico se il meteo (essenziale) fallisce per timeout/rete
+    if (weather.status==='rejected') {
+      [weather] = await Promise.allSettled([fetchWeather()]);
+    }
     if (weather.status==='rejected') throw new Error('Meteo non disponibile');
     let alerts = [];
     if (alertData.status === 'fulfilled') {
@@ -2345,10 +2349,25 @@ function setRadarType(type, el) {
 }
 
 // Auto-geolocalizzazione all'avvio: tenta posizione reale, poi load()
+// Garantisce SEMPRE l'avvio dell'app anche se il GPS non risponde mai
 (function autoGeoOnStart() {
-  if (!navigator.geolocation) { load(); return; }
+  let started = false;
+  const startApp = () => {
+    if (started) return;
+    started = true;
+    updateHeader();
+    load();
+  };
+
+  // Failsafe: se entro 6s non è partito nulla, avvia comunque con i default
+  const failsafe = setTimeout(startApp, 6000);
+
+  if (!navigator.geolocation) { clearTimeout(failsafe); startApp(); return; }
+
   navigator.geolocation.getCurrentPosition(
     pos => {
+      const isLate = started;
+      if (!isLate) clearTimeout(failsafe);
       currentLat = pos.coords.latitude;
       currentLon = pos.coords.longitude;
       fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLon}&format=json&accept-language=it`)
@@ -2362,9 +2381,16 @@ function setRadarType(type, el) {
           currentCity = 'La tua posizione';
           currentRegion = `${currentLat.toFixed(2)}°N ${currentLon.toFixed(2)}°E`;
         })
-        .finally(() => { updateHeader(); load(); });
+        .finally(() => {
+          if (isLate) {
+            // L'app era già partita con i default: aggiorna ora con la posizione reale
+            updateHeader(); load();
+          } else {
+            startApp();
+          }
+        });
     },
-    () => { load(); }, // permesso negato o errore → carica con coordinate default
+    () => { clearTimeout(failsafe); startApp(); }, // permesso negato o errore → carica con coordinate default
     { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
   );
 })();
