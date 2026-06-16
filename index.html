@@ -2174,7 +2174,7 @@ function render(weatherData, marineData, pollenData) {
       </div>
       <div class="mare-subpanel" id="mare-subpanel-ais">
         <div class="ais-wrap">
-          <iframe src="https://www.marinetraffic.com/en/ais/embed/zoom:9/centery:38.05/centerx:15.75/maptype:3/shownames:false/mmsi:0/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:false/remember:false" scrolling="no" loading="lazy"></iframe>
+          <iframe src="https://www.marinetraffic.com/en/ais/embed/zoom:9/centery:38.05/centerx:15.75/maptype:2/shownames:false/mmsi:0/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:false/remember:false" scrolling="no" loading="lazy"></iframe>
         </div>
         <div class="ais-caption">Traffico navale in tempo reale (AIS) · Gioia Tauro → Stretto di Messina → Ionio · via MarineTraffic</div>
       </div>
@@ -2346,7 +2346,7 @@ function showRadarFrame(idx) {
     tileUrl = `https://tilecache.rainviewer.com${path}/256/{z}/{x}/{y}/0/0_0.png`;
   }
 
-  radarLayer = L.tileLayer(tileUrl, { opacity: 0.7, maxZoom: 18 }).addTo(radarMap);
+  radarLayer = L.tileLayer(tileUrl, { opacity: 0.7, maxZoom: 18, maxNativeZoom: 7 }).addTo(radarMap);
 
   const d = new Date(ts * 1000);
   setRadarTime(d.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}));
