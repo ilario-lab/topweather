@@ -2405,8 +2405,10 @@ function setRadarType(type, el) {
     load();
   };
 
-  // Failsafe: se entro 6s non è partito nulla, avvia comunque con i default
-  const failsafe = setTimeout(startApp, 6000);
+  // Failsafe: se entro 11s non è partito nulla, avvia comunque con i default
+  // (11s = margine oltre il timeout di 8s della fase di rilevamento rete/WiFi,
+  // così la geolocalizzazione automatica ha davvero il tempo di completarsi)
+  const failsafe = setTimeout(startApp, 11000);
 
   if (!navigator.geolocation) { clearTimeout(failsafe); startApp(); return; }
 
