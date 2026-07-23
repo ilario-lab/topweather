@@ -760,6 +760,33 @@
     font-size: 10px; color: var(--muted); text-align: center;
     padding: 8px 24px 0;
   }
+  /* ── CARTA NAUTICA ── */
+  #nauticalMap {
+    width: 100%; height: 460px;
+    border-radius: 18px; overflow: hidden;
+    border: 1px solid var(--border);
+    margin: 0 0 8px;
+  }
+  .nautical-wrap { padding: 0 16px; }
+  .nautical-controls {
+    display: flex; gap: 8px; justify-content: center;
+    padding: 10px 16px 4px; flex-wrap: wrap;
+  }
+  .nautical-btn {
+    padding: 7px 14px; border-radius: 50px; font-size: 11px;
+    font-weight: 600; background: var(--surface);
+    border: 1px solid var(--border); color: var(--muted);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .nautical-btn.active {
+    background: rgba(110,203,168,0.12);
+    border-color: rgba(110,203,168,0.35);
+    color: var(--accent3);
+  }
+  .nautical-status {
+    font-size: 11px; color: var(--muted); text-align: center;
+    padding: 4px 16px 8px; min-height: 20px;
+  }
 
   /* ── TEMPORALI / FULMINAZIONI ── */
   .lightning-wrap {
@@ -2167,6 +2194,7 @@ function render(weatherData, marineData, pollenData) {
       <div class="mare-subtabs">
         <div class="mare-subtab active" id="mare-sub-cond" onclick="switchMareSub('cond',this)">🌊 Condizioni</div>
         <div class="mare-subtab" id="mare-sub-ais" onclick="switchMareSub('ais',this)">🚢 Traffico navale</div>
+        <div class="mare-subtab" id="mare-sub-nautica" onclick="switchMareSub('nautica',this)">🗺️ Carta nautica</div>
       </div>
       <div class="mare-subpanel active" id="mare-subpanel-cond">${mareHTML}
         <div class="last-updated" style="margin-top:16px">Open-Meteo Marine API</div>
@@ -2177,6 +2205,26 @@ function render(weatherData, marineData, pollenData) {
           <iframe src="https://www.marinetraffic.com/en/ais/embed/zoom:9/centery:38.05/centerx:15.75/maptype:2/shownames:false/mmsi:0/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:false/remember:false" scrolling="no" loading="lazy"></iframe>
         </div>
         <div class="ais-caption">Traffico navale in tempo reale (AIS) · Gioia Tauro → Stretto di Messina → Ionio · via MarineTraffic</div>
+      </div>
+      <div class="mare-subpanel" id="mare-subpanel-nautica">
+        <div class="nautical-controls">
+          <button class="nautical-btn active" id="nautica-btn-osm" onclick="setNauticalLayer('osm',this)">🗺️ Standard</button>
+          <button class="nautical-btn" id="nautica-btn-sat" onclick="setNauticalLayer('sat',this)">🛰️ Satellite</button>
+          <button class="nautical-btn" id="nautica-btn-track" onclick="toggleNauticalTracking()">📍 Tracking</button>
+        </div>
+        <div class="nautical-controls" style="padding-top:0">
+          <button class="nautical-btn" id="nautica-btn-bathy" onclick="toggleNauticalOverlay('bathy',this)">🌊 Fondali</button>
+          <button class="nautical-btn" id="nautica-btn-contours" onclick="toggleNauticalOverlay('contours',this)">📏 Isobate</button>
+          <button class="nautical-btn" id="nautica-btn-cables" onclick="toggleNauticalOverlay('cables',this)">📡 Cavi telecom</button>
+          <button class="nautical-btn" id="nautica-btn-power" onclick="toggleNauticalOverlay('power',this)">⚡ Cavi elettrici</button>
+          <button class="nautical-btn" id="nautica-btn-pipes" onclick="toggleNauticalOverlay('pipes',this)">🛢️ Pipeline</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);text-align:center;padding:2px 16px 6px">
+          💡 Tocca un punto in mare per ottenere la profondità esatta
+        </div>
+        <div class="nautical-status" id="nautical-status">Centra sulla tua posizione con il pulsante 📍</div>
+        <div class="nautical-wrap"><div id="nauticalMap"></div></div>
+        <div class="ais-caption">Carta nautica OpenSeaMap · Fondali &amp; infrastrutture EMODnet (UE) · Gratuito, nessuna registrazione</div>
       </div>
     </div>
     <div id="panel-pollini" class="tab-panel ${activeTab==='pollini'?'active':''}">
@@ -2498,6 +2546,214 @@ function switchMareSub(name, btn) {
   if (btn) btn.classList.add('active');
   const panel = document.getElementById('mare-subpanel-' + name);
   if (panel) panel.classList.add('active');
+  if (name === 'nautica') initNauticalMap();
+}
+
+// ── CARTA NAUTICA ──────────────────────────────────────────────
+let nauticalMap = null;
+let nauticalBaseLayer = null;
+let nauticalSeaLayer = null;
+let nauticalPositionMarker = null;
+let nauticalAccCircle = null;
+let nauticalWatchId = null;
+let nauticalTracking = false;
+let nauticalCurrentBase = 'osm';
+
+// Layer WMS EMODnet sovrapposti
+const NAUTICAL_OVERLAYS = {
+  bathy: null, contours: null, cables: null, power: null, pipes: null
+};
+
+const EMODNET_WMS_BATHY = 'https://ows.emodnet-bathymetry.eu/wms';
+const EMODNET_WMS_HA    = 'https://ows.emodnet-humanactivities.eu/wms';
+
+function getNauticalOverlayLayer(key) {
+  const wmsHA   = 'https://ows.emodnet-humanactivities.eu/wms';
+  const wmsBATH = 'https://ows.emodnet-bathymetry.eu/wms';
+  const base = { transparent: true, format: 'image/png', maxZoom: 18, version: '1.1.1' };
+
+  if (key === 'bathy')    return L.tileLayer.wms(wmsBATH, { ...base, layers: 'emodnet:mean_rainbowcolour', opacity: 0.55 });
+  if (key === 'contours') return L.tileLayer.wms(wmsBATH, { ...base, layers: 'emodnet:contours', opacity: 0.9 });
+  if (key === 'cables')   return L.tileLayer.wms(wmsHA,   { ...base, layers: 'emodnet:tcables', opacity: 0.9 });
+  if (key === 'power')    return L.tileLayer.wms(wmsHA,   { ...base, layers: 'emodnet:pcablesbshcontis', opacity: 0.9 });
+  if (key === 'pipes')    return L.tileLayer.wms(wmsHA,   { ...base, layers: 'emodnet:pipelines', opacity: 0.9 });
+}
+
+let nauticalDepthPopup = null;
+
+async function queryDepthAtPoint(lat, lon) {
+  const status = document.getElementById('nautical-status');
+  if (nauticalDepthPopup) { nauticalDepthPopup.remove(); nauticalDepthPopup = null; }
+  if (status) status.textContent = '🔍 Interrogazione profondità...';
+  try {
+    const url = `https://rest.emodnet-bathymetry.eu/depth/point?geom=POINT(${lon} ${lat})`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    const avg = d.avg != null ? Math.round(Math.abs(d.avg)) : null;
+    const smoothed = d.smoothed != null ? Math.round(Math.abs(d.smoothed)) : null;
+    if (avg == null && smoothed == null) throw new Error('no data');
+    const depthText = smoothed != null ? smoothed : avg;
+    const content = `<div style="font-size:13px;font-weight:600">📍 ${lat.toFixed(4)}°N ${lon.toFixed(4)}°E</div>
+      <div style="margin-top:4px">Profondità: <b style="color:#6ecba8">${depthText} m</b></div>
+      ${avg != null && smoothed != null ? `<div style="font-size:10px;opacity:.7">media: ${avg} m · smoothed: ${smoothed} m</div>` : ''}`;
+    nauticalDepthPopup = L.popup()
+      .setLatLng([lat, lon])
+      .setContent(content)
+      .openOn(nauticalMap);
+    if (status) status.textContent = `Profondità in ${lat.toFixed(4)}°N ${lon.toFixed(4)}°E: ${depthText} m`;
+  } catch(e) {
+    if (status) status.textContent = 'Nessun dato di profondità per questo punto (potrebbe essere terra)';
+  }
+}
+
+function toggleNauticalOverlay(key, btn) {
+  if (!nauticalMap) return;
+  if (NAUTICAL_OVERLAYS[key]) {
+    nauticalMap.removeLayer(NAUTICAL_OVERLAYS[key]);
+    NAUTICAL_OVERLAYS[key] = null;
+    btn.classList.remove('active');
+  } else {
+    NAUTICAL_OVERLAYS[key] = getNauticalOverlayLayer(key).addTo(nauticalMap);
+    btn.classList.add('active');
+  }
+}
+
+function initNauticalMap() {
+  if (nauticalMap) { nauticalMap.invalidateSize(); return; }
+
+  nauticalMap = L.map('nauticalMap', {
+    center: [currentLat, currentLon],
+    zoom: 12,
+    zoomControl: true,
+    attributionControl: true
+  });
+
+  // Layer base OSM
+  nauticalBaseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(nauticalMap);
+
+  // Click sulla mappa → profondità esatta via REST EMODnet
+  nauticalMap.on('click', function(e) {
+    queryDepthAtPoint(e.latlng.lat, e.latlng.lng);
+  });
+
+  // Layer OpenSeaMap (boe, fari, segnalamenti)
+  nauticalSeaLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    opacity: 1,
+    attribution: '© OpenSeaMap contributors'
+  }).addTo(nauticalMap);
+
+  // Marker posizione iniziale (coordinate correnti app)
+  updateNauticalPosition({ lat: currentLat, lon: currentLon, accuracy: null, heading: null });
+}
+
+function updateNauticalPosition({ lat, lon, accuracy, heading }) {
+  if (!nauticalMap) return;
+
+  // Icona barca con orientamento se disponibile
+  const angle = (heading != null && !isNaN(heading)) ? heading : 0;
+  const boatIcon = L.divIcon({
+    className: '',
+    html: `<div style="
+      width:28px; height:28px;
+      display:flex; align-items:center; justify-content:center;
+      transform: rotate(${angle}deg);
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+      font-size:22px; line-height:1;
+    ">⛵</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  });
+
+  if (nauticalPositionMarker) {
+    nauticalPositionMarker.setLatLng([lat, lon]);
+    nauticalPositionMarker.setIcon(boatIcon);
+  } else {
+    nauticalPositionMarker = L.marker([lat, lon], { icon: boatIcon, zIndexOffset: 1000 })
+      .addTo(nauticalMap)
+      .bindPopup('📍 La tua posizione');
+  }
+
+  // Cerchio di accuratezza
+  if (accuracy) {
+    if (nauticalAccCircle) {
+      nauticalAccCircle.setLatLng([lat, lon]).setRadius(accuracy);
+    } else {
+      nauticalAccCircle = L.circle([lat, lon], {
+        radius: accuracy,
+        color: '#6ecba8', fillColor: '#6ecba8', fillOpacity: 0.08, weight: 1
+      }).addTo(nauticalMap);
+    }
+  }
+
+  if (nauticalTracking) nauticalMap.setView([lat, lon]);
+}
+
+function toggleNauticalTracking() {
+  const btn = document.getElementById('nautica-btn-track');
+  const status = document.getElementById('nautical-status');
+
+  if (nauticalTracking) {
+    // Ferma tracking
+    if (nauticalWatchId != null) { navigator.geolocation.clearWatch(nauticalWatchId); nauticalWatchId = null; }
+    nauticalTracking = false;
+    btn.classList.remove('active');
+    btn.textContent = '📍 Tracking';
+    status.textContent = 'Tracking disattivato';
+  } else {
+    // Avvia tracking
+    if (!navigator.geolocation) { status.textContent = '⚠️ Geolocalizzazione non supportata'; return; }
+    nauticalTracking = true;
+    btn.classList.add('active');
+    btn.textContent = '⏹ Stop tracking';
+    status.textContent = '🔍 Acquisizione GPS...';
+
+    nauticalWatchId = navigator.geolocation.watchPosition(
+      pos => {
+        const { latitude: lat, longitude: lon, accuracy, heading } = pos.coords;
+        updateNauticalPosition({ lat, lon, accuracy, heading });
+        const accText = accuracy ? ` · Precisione ±${Math.round(accuracy)}m` : '';
+        status.textContent = `📍 ${lat.toFixed(5)}°N  ${lon.toFixed(5)}°E${accText}`;
+      },
+      err => {
+        const msgs = { 1: 'Accesso negato', 2: 'Posizione non disponibile', 3: 'Timeout GPS' };
+        status.textContent = '⚠️ ' + (msgs[err.code] || 'Errore GPS');
+        nauticalTracking = false;
+        btn.classList.remove('active');
+        btn.textContent = '📍 Tracking';
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+    );
+  }
+}
+
+function setNauticalLayer(type, btn) {
+  if (!nauticalMap) return;
+  document.querySelectorAll('.nautical-btn').forEach(b => {
+    if (b.id && b.id.startsWith('nautica-btn-')) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  nauticalCurrentBase = type;
+
+  if (nauticalBaseLayer) { nauticalMap.removeLayer(nauticalBaseLayer); nauticalBaseLayer = null; }
+
+  if (type === 'osm') {
+    nauticalBaseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18, attribution: '© OpenStreetMap contributors'
+    });
+  } else {
+    nauticalBaseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18, attribution: '© Esri World Imagery'
+    });
+  }
+
+  nauticalBaseLayer.addTo(nauticalMap);
+  // Riporta OpenSeaMap sopra al base layer
+  if (nauticalSeaLayer) { nauticalSeaLayer.remove(); nauticalSeaLayer.addTo(nauticalMap); }
 }
 
 function switchModelSub(name, btn) {
