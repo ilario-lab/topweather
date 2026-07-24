@@ -1231,6 +1231,7 @@ function switchTab(name, el) {
   if (name === 'metar') initMetar();
   if (name === 'ventusky') initAstro();
   if (name === 'effemeridi') initEffemeridi();
+
 }
 
 // ============================================================
@@ -2215,12 +2216,6 @@ function render(weatherData, marineData, pollenData) {
         <div class="nautical-controls" style="padding-top:0">
           <button class="nautical-btn" id="nautica-btn-bathy" onclick="toggleNauticalOverlay('bathy',this)">🌊 Fondali</button>
           <button class="nautical-btn" id="nautica-btn-contours" onclick="toggleNauticalOverlay('contours',this)">📏 Isobate</button>
-          <button class="nautical-btn" id="nautica-btn-cables" onclick="toggleNauticalOverlay('cables',this)">📡 Cavi telecom</button>
-          <button class="nautical-btn" id="nautica-btn-power" onclick="toggleNauticalOverlay('power',this)">⚡ Cavi elettrici</button>
-          <button class="nautical-btn" id="nautica-btn-pipes" onclick="toggleNauticalOverlay('pipes',this)">🛢️ Pipeline</button>
-        </div>
-        <div style="font-size:10px;color:var(--muted);text-align:center;padding:2px 16px 6px">
-          💡 Tocca un punto in mare per ottenere la profondità esatta
         </div>
         <div class="nautical-status" id="nautical-status">Centra sulla tua posizione con il pulsante 📍</div>
         <div class="nautical-wrap"><div id="nauticalMap"></div></div>
@@ -2560,24 +2555,19 @@ let nauticalTracking = false;
 let nauticalCurrentBase = 'osm';
 
 // Layer WMS EMODnet sovrapposti
-const NAUTICAL_OVERLAYS = {
-  bathy: null, contours: null, cables: null, power: null, pipes: null
-};
-
-const EMODNET_WMS_BATHY = 'https://ows.emodnet-bathymetry.eu/wms';
-const EMODNET_WMS_HA    = 'https://ows.emodnet-humanactivities.eu/wms';
+const NAUTICAL_OVERLAYS = { bathy: null, contours: null };
 
 function getNauticalOverlayLayer(key) {
-  const wmsHA   = 'https://ows.emodnet-humanactivities.eu/wms';
   const wmsBATH = 'https://ows.emodnet-bathymetry.eu/wms';
   const base = { transparent: true, format: 'image/png', maxZoom: 18, version: '1.1.1' };
-
   if (key === 'bathy')    return L.tileLayer.wms(wmsBATH, { ...base, layers: 'emodnet:mean_rainbowcolour', opacity: 0.55 });
   if (key === 'contours') return L.tileLayer.wms(wmsBATH, { ...base, layers: 'emodnet:contours', opacity: 0.9 });
-  if (key === 'cables')   return L.tileLayer.wms(wmsHA,   { ...base, layers: 'emodnet:tcables', opacity: 0.9 });
-  if (key === 'power')    return L.tileLayer.wms(wmsHA,   { ...base, layers: 'emodnet:pcablesbshcontis', opacity: 0.9 });
-  if (key === 'pipes')    return L.tileLayer.wms(wmsHA,   { ...base, layers: 'emodnet:pipelines', opacity: 0.9 });
+  return null;
 }
+
+// Cache GeoJSON cavi TeleGeography
+
+// Cache GeoJSON non più usata - rimossa
 
 let nauticalDepthPopup = null;
 
@@ -2614,8 +2604,11 @@ function toggleNauticalOverlay(key, btn) {
     NAUTICAL_OVERLAYS[key] = null;
     btn.classList.remove('active');
   } else {
-    NAUTICAL_OVERLAYS[key] = getNauticalOverlayLayer(key).addTo(nauticalMap);
-    btn.classList.add('active');
+    const layer = getNauticalOverlayLayer(key);
+    if (layer) {
+      NAUTICAL_OVERLAYS[key] = layer.addTo(nauticalMap);
+      btn.classList.add('active');
+    }
   }
 }
 
@@ -2635,7 +2628,7 @@ function initNauticalMap() {
     attribution: '© OpenStreetMap contributors'
   }).addTo(nauticalMap);
 
-  // Click sulla mappa → profondità esatta via REST EMODnet
+  // Click sulla mappa → profondità
   nauticalMap.on('click', function(e) {
     queryDepthAtPoint(e.latlng.lat, e.latlng.lng);
   });
@@ -2647,9 +2640,10 @@ function initNauticalMap() {
     attribution: '© OpenSeaMap contributors'
   }).addTo(nauticalMap);
 
-  // Marker posizione iniziale (coordinate correnti app)
+  // Marker posizione iniziale
   updateNauticalPosition({ lat: currentLat, lon: currentLon, accuracy: null, heading: null });
 }
+
 
 function updateNauticalPosition({ lat, lon, accuracy, heading }) {
   if (!nauticalMap) return;
