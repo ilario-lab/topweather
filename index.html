@@ -705,6 +705,61 @@
   .iss-stat-val { font-size: 16px; font-weight: 600; color: #a082ff; letter-spacing: -0.3px; }
   .iss-stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
 
+  /* ── ISS Notifica + Puntatore AR ── */
+  .iss-notify-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 11px 0; border-radius: 50px; margin-top: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    background: rgba(160,130,255,0.12); border: 1px solid rgba(160,130,255,0.3);
+    color: #a082ff; transition: all 0.2s;
+  }
+  .iss-notify-btn.active { background: rgba(160,130,255,0.22); }
+  .iss-ar-wrap {
+    margin-top: 12px; border-radius: 18px; overflow: hidden;
+    border: 1px solid rgba(160,130,255,0.2);
+    background: rgba(160,130,255,0.04);
+    display: none;
+  }
+  .iss-ar-wrap.visible { display: block; }
+  .iss-ar-compass {
+    position: relative; width: 200px; height: 200px;
+    margin: 20px auto;
+  }
+  .iss-ar-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid rgba(160,130,255,0.3);
+  }
+  .iss-ar-needle {
+    position: absolute; top: 50%; left: 50%;
+    width: 4px; height: 80px;
+    margin-left: -2px; margin-top: -80px;
+    border-radius: 2px;
+    background: linear-gradient(to top, transparent, #a082ff);
+    transform-origin: bottom center;
+    transition: transform 0.3s ease;
+  }
+  .iss-ar-center {
+    position: absolute; top: 50%; left: 50%;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #a082ff; transform: translate(-50%,-50%);
+  }
+  .iss-ar-north {
+    position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: rgba(160,130,255,0.6); font-weight: 600;
+  }
+  .iss-ar-info {
+    text-align: center; padding: 0 16px 16px;
+    font-size: 12px; color: var(--muted); line-height: 1.6;
+  }
+  .iss-ar-az { font-size: 22px; font-weight: 700; color: #a082ff; }
+  @keyframes iss-pulse {
+    0%,100% { transform: translate(-50%,-50%) scale(1); opacity:1; }
+    50% { transform: translate(-50%,-50%) scale(1.5); opacity:0.5; }
+  }
+  .iss-ar-center.on-target {
+    animation: iss-pulse 1s infinite;
+    background: #6ecba8 !important;
+  }
   /* ── MODELLI PREVISIONALI sub-tabs ── */
   .model-subtabs {
     display: flex; gap: 6px;
@@ -4530,6 +4585,8 @@ function switchAstroSub(name, btn) {
   if (name === 'iss') {
     if (issTimer) clearTimeout(issTimer);
     fetchISSPosition(currentLat, currentLon);
+  } else {
+    if (ISS_AR.active) toggleISSAR();
   }
   if (name === 'voyager') renderVoyagerLive();
   if (name === 'perseverance') fetchPerseveranceData();
@@ -4786,9 +4843,41 @@ function renderISSPanel(lat, lon) {
         <div class="iss-stat"><div class="iss-stat-val" id="iss-vis">—</div><div class="iss-stat-label">Visibilità</div></div>
         <div class="iss-stat"><div class="iss-stat-val" id="iss-dist" style="font-size:13px">—</div><div class="iss-stat-label">Da te (km)</div></div>
       </div>
-      <div id="iss-status" style="margin-top:10px;background:rgba(160,130,255,0.07);border:1px solid rgba(160,130,255,0.18);border-radius:12px;padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">
-        Connessione in corso...
+      <div id="iss-visibility-banner" style="margin-top:10px;border-radius:12px;padding:12px 16px;font-size:13px;font-weight:600;text-align:center;background:rgba(160,130,255,0.07);border:1px solid rgba(160,130,255,0.2);color:var(--muted)">
+        ⏳ Calcolo visibilità...
       </div>
+      <div id="iss-status" style="margin-top:6px;font-size:11px;color:var(--muted);text-align:center;min-height:16px">
+      </div>
+
+      <!-- Pulsante notifica -->
+      <button class="iss-notify-btn" id="iss-notify-btn" onclick="toggleISSNotify()">
+        🔔 Avvisami quando è visibile
+      </button>
+      <div id="iss-notify-status" style="font-size:10px;color:var(--muted);text-align:center;margin-top:5px;min-height:14px"></div>
+
+      <!-- Puntatore AR -->
+      <button class="iss-notify-btn" id="iss-ar-btn" onclick="toggleISSAR()" style="margin-top:6px;background:rgba(160,130,255,0.07)">
+        🧭 Punta verso l'ISS
+      </button>
+      <div class="iss-ar-wrap" id="iss-ar-wrap">
+        <div style="display:flex;align-items:center;justify-content:center;gap:16px;padding-top:16px">
+          <div class="iss-ar-compass" id="iss-ar-compass" style="margin:0">
+            <div class="iss-ar-ring"></div>
+            <div class="iss-ar-north">N</div>
+            <div class="iss-ar-needle" id="iss-ar-needle"></div>
+            <div class="iss-ar-center"></div>
+          </div>
+          <!-- Barra elevazione -->
+          <div id="iss-ar-elev-bar" style="min-width:40px;text-align:center"></div>
+        </div>
+        <div class="iss-ar-info">
+          <div class="iss-ar-az" id="iss-ar-az">—°</div>
+          <div id="iss-ar-elev" style="font-size:13px;color:var(--muted)">Elevazione: —°</div>
+          <div id="iss-ar-dist-ar" style="font-size:11px;color:var(--muted);margin-top:4px">Distanza: — km</div>
+          <div id="iss-ar-msg" style="font-size:10px;color:rgba(160,130,255,0.6);margin-top:6px">Orienta il telefono in direzione nord per calibrare</div>
+        </div>
+      </div>
+
       <div style="margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5">
         💡 <strong style="color:var(--text)">Quando osservarla?</strong> È visibile ad occhio nudo come un punto luminoso che attraversa il cielo in ~6 minuti, nelle ore serali/mattutine quando il cielo è buio ma l'ISS è ancora illuminata dal sole.
       </div>
@@ -4822,6 +4911,31 @@ async function fetchISSPosition(userLat, userLon) {
     if (userLat && userLon) {
       const dist = Math.round(haversineKm(userLat, userLon, issLat, issLon));
       set('iss-dist', dist.toLocaleString('it-IT'));
+      // Aggiorna dati AR
+      const issAltNum = parseFloat(d.altitude);
+      const ar = calcISSAzimuthElevation(userLat, userLon, issLat, issLon, issAltNum);
+      ISS_AR.issAzimuth   = ar.azimuth;
+      ISS_AR.issElevation = ar.elevation;
+      ISS_AR.issLat = issLat;
+      ISS_AR.issLon = issLon;
+      if (ISS_AR.active) updateISSARPointer();
+
+      // Banner visibilità
+      const banner = document.getElementById('iss-visibility-banner');
+      if (banner) {
+        const elev = ar.elevation;
+        const visible = elev > 10;
+        banner.style.background = visible ? 'rgba(110,203,168,0.15)' : 'rgba(220,80,80,0.12)';
+        banner.style.borderColor = visible ? 'rgba(110,203,168,0.4)' : 'rgba(220,80,80,0.3)';
+        banner.style.color = visible ? '#6ecba8' : '#e05555';
+        if (visible) {
+          banner.textContent = `🟢 VISIBILE — Elevazione ${Math.round(elev)}° · Direzione ${Math.round(ar.azimuth)}°`;
+        } else if (elev > 0) {
+          banner.textContent = `🔴 NON VISIBILE — Troppo bassa (${Math.round(elev)}°)`;
+        } else {
+          banner.textContent = `🔴 NON VISIBILE — Sotto l'orizzonte (${Math.round(elev)}°)`;
+        }
+      }
     }
 
     if (elStatus) {
@@ -4842,7 +4956,243 @@ async function fetchISSPosition(userLat, userLon) {
   }
 }
 
-// ── Pannello Voyager ─────────────────────────────────────────
+const ISS_AR = {
+  active: false,
+  orientHandler: null,
+  heading: 0,      // heading bussola telefono (gradi da Nord)
+  issAzimuth: 0,   // azimut ISS dalla posizione utente
+  issElevation: 0
+};
+
+const ISS_NOTIFY = {
+  active: false, timer: null, notified: false
+};
+
+// Calcola azimut e elevazione ISS dalla posizione utente
+function calcISSAzimuthElevation(userLat, userLon, issLat, issLon, issAltKm) {
+  const R = 6371; // raggio Terra km
+  const dLat = (issLat - userLat) * Math.PI / 180;
+  const dLon = (issLon - userLon) * Math.PI / 180;
+  const uLat = userLat * Math.PI / 180;
+  const iLat = issLat * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(uLat)*Math.cos(iLat)*Math.sin(dLon/2)**2;
+  const distGround = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  // Azimut
+  const y = Math.sin(dLon) * Math.cos(iLat);
+  const x = Math.cos(uLat)*Math.sin(iLat) - Math.sin(uLat)*Math.cos(iLat)*Math.cos(dLon);
+  const az = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+
+  // Elevazione approssimata
+  const elev = Math.atan2(issAltKm - 0, distGround) * 180 / Math.PI;
+
+  return { azimuth: az, elevation: Math.max(-90, Math.min(90, elev)), distGround };
+}
+
+function updateISSARPointer() {
+  if (!ISS_AR.active) return;
+  const needle = document.getElementById('iss-ar-needle');
+  const azEl   = document.getElementById('iss-ar-az');
+  const elevEl = document.getElementById('iss-ar-elev');
+  const distEl = document.getElementById('iss-ar-dist-ar');
+  const msgEl  = document.getElementById('iss-ar-msg');
+  if (!needle) return;
+
+  // Angolo ago = azimut ISS - heading telefono
+  const angle = (ISS_AR.issAzimuth - ISS_AR.heading + 360) % 360;
+  needle.style.transform = `rotate(${angle}deg)`;
+
+  if (azEl) azEl.textContent = Math.round(ISS_AR.issAzimuth) + '°';
+  if (elevEl) elevEl.textContent = `Elevazione: ${ISS_AR.issElevation >= 0 ? '+' : ''}${Math.round(ISS_AR.issElevation)}°`;
+
+  const dist = haversineKm(currentLat, currentLon, ISS_AR.issLat || 0, ISS_AR.issLon || 0);
+  if (distEl) distEl.textContent = `Distanza: ${Math.round(dist).toLocaleString('it-IT')} km`;
+  if (msgEl) {
+    if (ISS_AR.issElevation > 0) {
+      msgEl.textContent = '✅ ISS sopra l\'orizzonte — punta nella direzione indicata';
+      msgEl.style.color = '#6ecba8';
+    } else {
+      msgEl.textContent = `ISS sotto l'orizzonte (${Math.round(ISS_AR.issElevation)}°) — attendi il passaggio`;
+      msgEl.style.color = 'rgba(160,130,255,0.6)';
+    }
+  }
+}
+
+function toggleISSAR() {
+  const btn  = document.getElementById('iss-ar-btn');
+  const wrap = document.getElementById('iss-ar-wrap');
+  if (!btn || !wrap) return;
+  ISS_AR.active = !ISS_AR.active;
+  if (ISS_AR.active) {
+    wrap.classList.add('visible');
+    btn.textContent = '⏹ Chiudi puntatore';
+    btn.classList.add('active');
+    // Avvia bussola
+    if (window.DeviceOrientationEvent) {
+      // iOS 13+ richiede permesso esplicito
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then(state => {
+            if (state === 'granted') startISSOrientation();
+            else {
+              document.getElementById('iss-ar-msg').textContent = '⚠️ Permesso bussola negato';
+            }
+          }).catch(() => startISSOrientation());
+      } else {
+        startISSOrientation();
+      }
+    } else {
+      document.getElementById('iss-ar-msg').textContent = '⚠️ Bussola non supportata su questo dispositivo';
+    }
+  } else {
+    wrap.classList.remove('visible');
+    btn.textContent = '🧭 Punta verso l\'ISS';
+    btn.classList.remove('active');
+    stopISSOrientation();
+  }
+}
+
+function startISSOrientation() {
+  ISS_AR.orientHandler = (e) => {
+    let heading = 0;
+    if (e.webkitCompassHeading != null) {
+      heading = e.webkitCompassHeading;
+    } else if (e.alpha != null) {
+      heading = (360 - e.alpha) % 360;
+    }
+    ISS_AR.heading = heading;
+
+    // beta: 0° = telefono piatto sul tavolo, 90° = telefono verticale verso il cielo
+    // Quando tieni il telefono in mano puntando verso il cielo, beta è ~45-90°
+    const beta = e.beta != null ? e.beta : 0;
+    ISS_AR.phoneBeta = beta;
+
+    // Confronta azimut (direzione orizzontale) ed elevazione (inclinazione)
+    const azDiff  = Math.abs(((ISS_AR.issAzimuth - heading + 540) % 360) - 180);
+    const elevDiff = Math.abs(beta - ISS_AR.issElevation);
+    const onTarget = azDiff < 15 && elevDiff < 15;
+
+    const needle  = document.getElementById('iss-ar-needle');
+    const ring    = document.getElementById('iss-ar-ring');
+    const center  = document.getElementById('iss-ar-center');
+    const msgEl   = document.getElementById('iss-ar-msg');
+    const elevBar = document.getElementById('iss-ar-elev-bar');
+    const color   = onTarget ? '#6ecba8' : '#a082ff';
+
+    if (needle) needle.style.background = `linear-gradient(to top, transparent, ${color})`;
+    if (ring)   ring.style.borderColor  = onTarget ? 'rgba(110,203,168,0.6)' : 'rgba(160,130,255,0.3)';
+    if (center) { center.style.background = color; center.classList.toggle('on-target', onTarget); }
+
+    // Indicatore elevazione: barra laterale che mostra quanto inclinare il telefono
+    if (elevBar) {
+      const issElev = Math.max(0, Math.min(90, ISS_AR.issElevation));
+      const phoneElev = Math.max(0, Math.min(90, beta));
+      const issPercent   = (issElev / 90) * 100;
+      const phonePercent = (phoneElev / 90) * 100;
+      elevBar.innerHTML = `
+        <div style="font-size:9px;color:var(--muted);text-align:center;margin-bottom:4px">ELEV</div>
+        <div style="position:relative;width:12px;height:120px;background:rgba(255,255,255,0.05);border-radius:6px;border:1px solid rgba(160,130,255,0.2);margin:0 auto">
+          <!-- Elevazione ISS (target) -->
+          <div style="position:absolute;bottom:${issPercent}%;left:-1px;right:-1px;height:2px;background:#a082ff;border-radius:1px"></div>
+          <!-- Elevazione telefono attuale -->
+          <div style="position:absolute;bottom:${phonePercent}%;left:1px;right:1px;height:6px;background:${Math.abs(phonePercent-issPercent)<17 ? '#6ecba8' : '#c8a96e'};border-radius:3px;transition:bottom 0.2s"></div>
+        </div>
+        <div style="font-size:9px;color:var(--muted);text-align:center;margin-top:4px">${Math.round(beta)}°</div>`;
+    }
+
+    if (msgEl) {
+      if (ISS_AR.issElevation <= 0) {
+        msgEl.textContent = `ISS sotto l'orizzonte (${Math.round(ISS_AR.issElevation)}°) — attendi il passaggio`;
+        msgEl.style.color = 'rgba(160,130,255,0.6)';
+      } else if (onTarget) {
+        msgEl.textContent = '🎯 Sei puntato sull\'ISS! Guarda in quella direzione';
+        msgEl.style.color = '#6ecba8';
+      } else if (azDiff >= 15) {
+        msgEl.textContent = `↻ Ruota il telefono verso ${Math.round(ISS_AR.issAzimuth)}° (sei a ${Math.round(azDiff)}°)`;
+        msgEl.style.color = '#c8a96e';
+      } else {
+        msgEl.textContent = elevDiff > 0
+          ? `↑ Inclina il telefono ${beta < ISS_AR.issElevation ? 'verso l\'alto' : 'verso il basso'} di ${Math.round(elevDiff)}°`
+          : '↑ Inclina il telefono verso il cielo';
+        msgEl.style.color = '#c8a96e';
+      }
+    }
+
+    updateISSARPointer();
+  };
+  window.addEventListener('deviceorientation', ISS_AR.orientHandler, true);
+}
+
+function stopISSOrientation() {
+  if (ISS_AR.orientHandler) {
+    window.removeEventListener('deviceorientation', ISS_AR.orientHandler, true);
+    ISS_AR.orientHandler = null;
+  }
+}
+
+// Notifiche ISS
+async function toggleISSNotify() {
+  const btn    = document.getElementById('iss-notify-btn');
+  const status = document.getElementById('iss-notify-status');
+  if (!btn) return;
+
+  if (ISS_NOTIFY.active) {
+    ISS_NOTIFY.active = false;
+    if (ISS_NOTIFY.timer) { clearInterval(ISS_NOTIFY.timer); ISS_NOTIFY.timer = null; }
+    btn.textContent = '🔔 Avvisami quando è visibile';
+    btn.classList.remove('active');
+    if (status) status.textContent = 'Notifiche disattivate';
+    return;
+  }
+
+  // Richiedi permesso notifiche
+  if (!('Notification' in window)) {
+    if (status) status.textContent = '⚠️ Notifiche non supportate su questo browser';
+    return;
+  }
+  let perm = Notification.permission;
+  if (perm === 'default') perm = await Notification.requestPermission();
+  if (perm !== 'granted') {
+    if (status) status.textContent = '⚠️ Permesso notifiche negato — abilitalo nelle impostazioni del browser';
+    return;
+  }
+
+  ISS_NOTIFY.active = true;
+  ISS_NOTIFY.notified = false;
+  btn.textContent = '🔕 Disattiva notifica';
+  btn.classList.add('active');
+  if (status) status.textContent = '✅ Ti avviseremo quando l\'ISS è vicina — controlla ogni 60s';
+
+  ISS_NOTIFY.timer = setInterval(async () => {
+    if (!ISS_NOTIFY.active) return;
+    try {
+      const r = await fetch('https://api.wheretheiss.at/v1/satellites/25544', { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return;
+      const d = await r.json();
+      const issLat = parseFloat(d.latitude);
+      const issLon = parseFloat(d.longitude);
+      const issAlt = parseFloat(d.altitude);
+      const dist   = Math.round(haversineKm(currentLat, currentLon, issLat, issLon));
+      const { azimuth, elevation } = calcISSAzimuthElevation(currentLat, currentLon, issLat, issLon, issAlt);
+      const visible = elevation > 10;
+
+      if (visible && !ISS_NOTIFY.notified) {
+        ISS_NOTIFY.notified = true;
+        new Notification('🛸 ISS visibile ora!', {
+          body: `La Stazione Spaziale è VISIBILE! Elevazione ${Math.round(elevation)}° · Direzione ${Math.round(azimuth)}° · Distanza ${dist.toLocaleString('it-IT')} km — Apri l'app e usa il puntatore AR!`,
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🛸</text></svg>'
+        });
+        if (status) status.textContent = `🛸 ISS VISIBILE — Elev. ${Math.round(elevation)}° · Az. ${Math.round(azimuth)}° · ${dist.toLocaleString('it-IT')} km`;
+        setTimeout(() => { ISS_NOTIFY.notified = false; }, 10 * 60 * 1000);
+      } else if (!visible) {
+        ISS_NOTIFY.notified = false;
+        if (status) status.textContent = elevation > 0
+          ? `ISS a ${Math.round(elevation)}° (troppo bassa) · Az. ${Math.round(azimuth)}° · ${dist.toLocaleString('it-IT')} km`
+          : `ISS sotto l'orizzonte (${Math.round(elevation)}°) · ${dist.toLocaleString('it-IT')} km`;
+      }
+    } catch(_) {}
+  }, 60000);
+}
 // Dati di riferimento NASA (pubblicati + estrapolazione lineare)
 // Voyager 1: vel ~17.043 km/s ≈ 3.595 AU/anno (eliocentric)
 // Voyager 2: vel ~15.341 km/s ≈ 3.232 AU/anno
