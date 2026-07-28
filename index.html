@@ -705,54 +705,6 @@
   .iss-stat-val { font-size: 16px; font-weight: 600; color: #a082ff; letter-spacing: -0.3px; }
   .iss-stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
 
-  /* ── ISS Notifica + Puntatore AR ── */
-  .iss-notify-btn {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    width: 100%; padding: 11px 0; border-radius: 50px; margin-top: 10px;
-    font-size: 13px; font-weight: 600; cursor: pointer;
-    background: rgba(160,130,255,0.12); border: 1px solid rgba(160,130,255,0.3);
-    color: #a082ff; transition: all 0.2s;
-  }
-  .iss-notify-btn.active { background: rgba(160,130,255,0.22); }
-  .iss-ar-wrap {
-    margin-top: 12px; border-radius: 18px; overflow: hidden;
-    border: 1px solid rgba(160,130,255,0.2);
-    background: rgba(160,130,255,0.04);
-    display: none;
-  }
-  .iss-ar-wrap.visible { display: block; }
-  .iss-ar-compass {
-    position: relative; width: 200px; height: 200px;
-    margin: 20px auto;
-  }
-  .iss-ar-ring {
-    position: absolute; inset: 0; border-radius: 50%;
-    border: 2px solid rgba(160,130,255,0.3);
-  }
-  .iss-ar-needle {
-    position: absolute; top: 50%; left: 50%;
-    width: 4px; height: 80px;
-    margin-left: -2px; margin-top: -80px;
-    border-radius: 2px;
-    background: linear-gradient(to top, transparent, #a082ff);
-    transform-origin: bottom center;
-    transition: transform 0.3s ease;
-  }
-  .iss-ar-center {
-    position: absolute; top: 50%; left: 50%;
-    width: 12px; height: 12px; border-radius: 50%;
-    background: #a082ff; transform: translate(-50%,-50%);
-  }
-  .iss-ar-north {
-    position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
-    font-size: 11px; color: rgba(160,130,255,0.6); font-weight: 600;
-  }
-  .iss-ar-info {
-    text-align: center; padding: 0 16px 16px;
-    font-size: 12px; color: var(--muted); line-height: 1.6;
-  }
-  .iss-ar-az { font-size: 22px; font-weight: 700; color: #a082ff; }
-
   /* ── MODELLI PREVISIONALI sub-tabs ── */
   .model-subtabs {
     display: flex; gap: 6px;
@@ -4578,9 +4530,6 @@ function switchAstroSub(name, btn) {
   if (name === 'iss') {
     if (issTimer) clearTimeout(issTimer);
     fetchISSPosition(currentLat, currentLon);
-  } else {
-    // Ferma bussola AR e notifiche se si esce dall'ISS
-    if (ISS_AR.active) toggleISSAR();
   }
   if (name === 'voyager') renderVoyagerLive();
   if (name === 'perseverance') fetchPerseveranceData();
@@ -4840,32 +4789,6 @@ function renderISSPanel(lat, lon) {
       <div id="iss-status" style="margin-top:10px;background:rgba(160,130,255,0.07);border:1px solid rgba(160,130,255,0.18);border-radius:12px;padding:11px 14px;font-size:12px;color:var(--muted);text-align:center">
         Connessione in corso...
       </div>
-
-      <!-- Pulsante notifica -->
-      <button class="iss-notify-btn" id="iss-notify-btn" onclick="toggleISSNotify()">
-        🔔 Avvisami quando è visibile
-      </button>
-      <div id="iss-notify-status" style="font-size:10px;color:var(--muted);text-align:center;margin-top:5px;min-height:14px"></div>
-
-      <!-- Puntatore AR -->
-      <button class="iss-notify-btn" id="iss-ar-btn" onclick="toggleISSAR()" style="margin-top:6px;background:rgba(160,130,255,0.07)">
-        🧭 Punta verso l'ISS
-      </button>
-      <div class="iss-ar-wrap" id="iss-ar-wrap">
-        <div class="iss-ar-compass" id="iss-ar-compass">
-          <div class="iss-ar-ring"></div>
-          <div class="iss-ar-north">N</div>
-          <div class="iss-ar-needle" id="iss-ar-needle"></div>
-          <div class="iss-ar-center"></div>
-        </div>
-        <div class="iss-ar-info">
-          <div class="iss-ar-az" id="iss-ar-az">—°</div>
-          <div id="iss-ar-elev" style="font-size:13px;color:var(--muted)">Elevazione: —°</div>
-          <div id="iss-ar-dist-ar" style="font-size:11px;color:var(--muted);margin-top:4px">Distanza: — km</div>
-          <div id="iss-ar-msg" style="font-size:10px;color:rgba(160,130,255,0.6);margin-top:6px">Orienta il telefono in direzione nord per calibrare</div>
-        </div>
-      </div>
-
       <div style="margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5">
         💡 <strong style="color:var(--text)">Quando osservarla?</strong> È visibile ad occhio nudo come un punto luminoso che attraversa il cielo in ~6 minuti, nelle ore serali/mattutine quando il cielo è buio ma l'ISS è ancora illuminata dal sole.
       </div>
@@ -4899,14 +4822,6 @@ async function fetchISSPosition(userLat, userLon) {
     if (userLat && userLon) {
       const dist = Math.round(haversineKm(userLat, userLon, issLat, issLon));
       set('iss-dist', dist.toLocaleString('it-IT'));
-      // Aggiorna dati AR
-      const issAlt = parseFloat(d.altitude);
-      const ar = calcISSAzimuthElevation(userLat, userLon, issLat, issLon, issAlt);
-      ISS_AR.issAzimuth   = ar.azimuth;
-      ISS_AR.issElevation = ar.elevation;
-      ISS_AR.issLat = issLat;
-      ISS_AR.issLon = issLon;
-      if (ISS_AR.active) updateISSARPointer();
     }
 
     if (elStatus) {
@@ -4927,192 +4842,7 @@ async function fetchISSPosition(userLat, userLon) {
   }
 }
 
-// ── ISS Notifiche + Puntatore AR ─────────────────────────────
-const ISS_AR = {
-  active: false,
-  orientHandler: null,
-  heading: 0,      // heading bussola telefono (gradi da Nord)
-  issAzimuth: 0,   // azimut ISS dalla posizione utente
-  issElevation: 0
-};
-
-const ISS_NOTIFY = {
-  active: false,
-  timer: null,
-  notified: false,
-  VISIBLE_DIST_KM: 2500  // soglia distanza per considerare l'ISS "potenzialmente visibile"
-};
-
-// Calcola azimut e elevazione ISS dalla posizione utente
-function calcISSAzimuthElevation(userLat, userLon, issLat, issLon, issAltKm) {
-  const R = 6371; // raggio Terra km
-  const dLat = (issLat - userLat) * Math.PI / 180;
-  const dLon = (issLon - userLon) * Math.PI / 180;
-  const uLat = userLat * Math.PI / 180;
-  const iLat = issLat * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(uLat)*Math.cos(iLat)*Math.sin(dLon/2)**2;
-  const distGround = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-  // Azimut
-  const y = Math.sin(dLon) * Math.cos(iLat);
-  const x = Math.cos(uLat)*Math.sin(iLat) - Math.sin(uLat)*Math.cos(iLat)*Math.cos(dLon);
-  const az = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
-
-  // Elevazione approssimata
-  const elev = Math.atan2(issAltKm - 0, distGround) * 180 / Math.PI;
-
-  return { azimuth: az, elevation: Math.max(-90, Math.min(90, elev)), distGround };
-}
-
-function updateISSARPointer() {
-  if (!ISS_AR.active) return;
-  const needle = document.getElementById('iss-ar-needle');
-  const azEl   = document.getElementById('iss-ar-az');
-  const elevEl = document.getElementById('iss-ar-elev');
-  const distEl = document.getElementById('iss-ar-dist-ar');
-  const msgEl  = document.getElementById('iss-ar-msg');
-  if (!needle) return;
-
-  // Angolo ago = azimut ISS - heading telefono
-  const angle = (ISS_AR.issAzimuth - ISS_AR.heading + 360) % 360;
-  needle.style.transform = `rotate(${angle}deg)`;
-
-  if (azEl) azEl.textContent = Math.round(ISS_AR.issAzimuth) + '°';
-  if (elevEl) elevEl.textContent = `Elevazione: ${ISS_AR.issElevation >= 0 ? '+' : ''}${Math.round(ISS_AR.issElevation)}°`;
-
-  const dist = haversineKm(currentLat, currentLon, ISS_AR.issLat || 0, ISS_AR.issLon || 0);
-  if (distEl) distEl.textContent = `Distanza: ${Math.round(dist).toLocaleString('it-IT')} km`;
-  if (msgEl) {
-    if (ISS_AR.issElevation > 0) {
-      msgEl.textContent = '✅ ISS sopra l\'orizzonte — punta nella direzione indicata';
-      msgEl.style.color = '#6ecba8';
-    } else {
-      msgEl.textContent = `ISS sotto l'orizzonte (${Math.round(ISS_AR.issElevation)}°) — attendi il passaggio`;
-      msgEl.style.color = 'rgba(160,130,255,0.6)';
-    }
-  }
-}
-
-function toggleISSAR() {
-  const btn  = document.getElementById('iss-ar-btn');
-  const wrap = document.getElementById('iss-ar-wrap');
-  if (!btn || !wrap) return;
-  ISS_AR.active = !ISS_AR.active;
-  if (ISS_AR.active) {
-    wrap.classList.add('visible');
-    btn.textContent = '⏹ Chiudi puntatore';
-    btn.classList.add('active');
-    // Avvia bussola
-    if (window.DeviceOrientationEvent) {
-      // iOS 13+ richiede permesso esplicito
-      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then(state => {
-            if (state === 'granted') startISSOrientation();
-            else {
-              document.getElementById('iss-ar-msg').textContent = '⚠️ Permesso bussola negato';
-            }
-          }).catch(() => startISSOrientation());
-      } else {
-        startISSOrientation();
-      }
-    } else {
-      document.getElementById('iss-ar-msg').textContent = '⚠️ Bussola non supportata su questo dispositivo';
-    }
-  } else {
-    wrap.classList.remove('visible');
-    btn.textContent = '🧭 Punta verso l\'ISS';
-    btn.classList.remove('active');
-    stopISSOrientation();
-  }
-}
-
-function startISSOrientation() {
-  ISS_AR.orientHandler = (e) => {
-    // alpha = rotazione attorno asse Z (0=Nord, 90=Est)
-    // Su Android: alpha è heading diretto
-    // Su iOS: compass heading è in webkitCompassHeading
-    let heading = 0;
-    if (e.webkitCompassHeading != null) {
-      heading = e.webkitCompassHeading; // iOS: già heading magnetico
-    } else if (e.alpha != null) {
-      heading = (360 - e.alpha) % 360;  // Android: inverti
-    }
-    ISS_AR.heading = heading;
-    updateISSARPointer();
-  };
-  window.addEventListener('deviceorientation', ISS_AR.orientHandler, true);
-}
-
-function stopISSOrientation() {
-  if (ISS_AR.orientHandler) {
-    window.removeEventListener('deviceorientation', ISS_AR.orientHandler, true);
-    ISS_AR.orientHandler = null;
-  }
-}
-
-// Notifiche ISS
-async function toggleISSNotify() {
-  const btn    = document.getElementById('iss-notify-btn');
-  const status = document.getElementById('iss-notify-status');
-  if (!btn) return;
-
-  if (ISS_NOTIFY.active) {
-    ISS_NOTIFY.active = false;
-    if (ISS_NOTIFY.timer) { clearInterval(ISS_NOTIFY.timer); ISS_NOTIFY.timer = null; }
-    btn.textContent = '🔔 Avvisami quando è visibile';
-    btn.classList.remove('active');
-    if (status) status.textContent = 'Notifiche disattivate';
-    return;
-  }
-
-  // Richiedi permesso notifiche
-  if (!('Notification' in window)) {
-    if (status) status.textContent = '⚠️ Notifiche non supportate su questo browser';
-    return;
-  }
-  let perm = Notification.permission;
-  if (perm === 'default') perm = await Notification.requestPermission();
-  if (perm !== 'granted') {
-    if (status) status.textContent = '⚠️ Permesso notifiche negato — abilitalo nelle impostazioni del browser';
-    return;
-  }
-
-  ISS_NOTIFY.active = true;
-  ISS_NOTIFY.notified = false;
-  btn.textContent = '🔕 Disattiva notifica';
-  btn.classList.add('active');
-  if (status) status.textContent = '✅ Ti avviseremo quando l\'ISS è vicina — controlla ogni 60s';
-
-  ISS_NOTIFY.timer = setInterval(async () => {
-    if (!ISS_NOTIFY.active) return;
-    try {
-      const r = await fetch('https://api.wheretheiss.at/v1/satellites/25544', { signal: AbortSignal.timeout(8000) });
-      if (!r.ok) return;
-      const d = await r.json();
-      const issLat = parseFloat(d.latitude);
-      const issLon = parseFloat(d.longitude);
-      const issAlt = parseFloat(d.altitude);
-      const dist   = Math.round(haversineKm(currentLat, currentLon, issLat, issLon));
-      const { elevation } = calcISSAzimuthElevation(currentLat, currentLon, issLat, issLon, issAlt);
-
-      if (dist < ISS_NOTIFY.VISIBLE_DIST_KM && !ISS_NOTIFY.notified) {
-        ISS_NOTIFY.notified = true;
-        new Notification('🛸 ISS in avvicinamento!', {
-          body: `La Stazione Spaziale è a ${dist.toLocaleString('it-IT')} km da te` +
-                (elevation > 0 ? ` — elevazione ${Math.round(elevation)}° (visibile!)` : ' — sotto l\'orizzonte'),
-          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🛸</text></svg>'
-        });
-        if (status) status.textContent = `🛸 Notifica inviata — ISS a ${dist.toLocaleString('it-IT')} km`;
-        // Reset dopo 10 minuti per eventuale prossimo passaggio
-        setTimeout(() => { ISS_NOTIFY.notified = false; }, 10 * 60 * 1000);
-      } else if (dist >= ISS_NOTIFY.VISIBLE_DIST_KM) {
-        ISS_NOTIFY.notified = false;
-        if (status) status.textContent = `ISS a ${dist.toLocaleString('it-IT')} km · in attesa avvicinamento (<${ISS_NOTIFY.VISIBLE_DIST_KM.toLocaleString('it-IT')} km)`;
-      }
-    } catch(_) {}
-  }, 60000);
-}
+// ── Pannello Voyager ─────────────────────────────────────────
 // Dati di riferimento NASA (pubblicati + estrapolazione lineare)
 // Voyager 1: vel ~17.043 km/s ≈ 3.595 AU/anno (eliocentric)
 // Voyager 2: vel ~15.341 km/s ≈ 3.232 AU/anno
