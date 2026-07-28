@@ -4585,8 +4585,10 @@ function switchAstroSub(name, btn) {
   if (name === 'iss') {
     if (issTimer) clearTimeout(issTimer);
     fetchISSPosition(currentLat, currentLon);
+    fetchISSNextPass();
   } else {
     if (ISS_AR.active) toggleISSAR();
+    if (issCountdownTimer) { clearInterval(issCountdownTimer); issCountdownTimer = null; }
   }
   if (name === 'voyager') renderVoyagerLive();
   if (name === 'perseverance') fetchPerseveranceData();
@@ -4846,6 +4848,13 @@ function renderISSPanel(lat, lon) {
       <div id="iss-visibility-banner" style="margin-top:10px;border-radius:12px;padding:12px 16px;font-size:13px;font-weight:600;text-align:center;background:rgba(160,130,255,0.07);border:1px solid rgba(160,130,255,0.2);color:var(--muted)">
         ⏳ Calcolo visibilità...
       </div>
+      <!-- Prossimo passaggio -->
+      <div id="iss-nextpass-banner" style="margin-top:8px;border-radius:12px;padding:12px 16px;font-size:12px;background:rgba(160,130,255,0.05);border:1px solid rgba(160,130,255,0.15);color:var(--muted);display:none">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.6;margin-bottom:6px">🔭 Prossimo passaggio visibile</div>
+        <div id="iss-nextpass-time" style="font-size:15px;font-weight:700;color:#a082ff">—</div>
+        <div id="iss-nextpass-detail" style="font-size:11px;margin-top:4px;color:var(--muted)">—</div>
+        <div id="iss-nextpass-countdown" style="font-size:13px;font-weight:600;color:#c8a96e;margin-top:6px">—</div>
+      </div>
       <div id="iss-status" style="margin-top:6px;font-size:11px;color:var(--muted);text-align:center;min-height:16px">
       </div>
 
@@ -4956,6 +4965,89 @@ async function fetchISSPosition(userLat, userLon) {
   }
 }
 
+// ── ISS Prossimo Passaggio (polluxlabs.io) ────────────────────
+let issNextPassData = null;
+let issCountdownTimer = null;
+
+async function fetchISSNextPass() {
+  try {
+    const url = `https://iss-api.polluxlabs.io/iss-pass?lat=${currentLat}&lon=${currentLon}&n=5&visible_only=true&min_elevation=10`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const passes = data.passes || [];
+    if (passes.length === 0) { showNoPassBanner(); return; }
+    issNextPassData = passes[0];
+    renderNextPassBanner();
+    if (issCountdownTimer) clearInterval(issCountdownTimer);
+    issCountdownTimer = setInterval(updateNextPassCountdown, 1000);
+  } catch(e) {
+    const banner = document.getElementById('iss-nextpass-banner');
+    if (banner) {
+      banner.style.display = 'block';
+      document.getElementById('iss-nextpass-time').textContent = '⚠️ Dati non disponibili';
+      document.getElementById('iss-nextpass-detail').textContent = 'Riprova più tardi';
+      document.getElementById('iss-nextpass-countdown').textContent = '';
+    }
+  }
+}
+
+function showNoPassBanner() {
+  const banner = document.getElementById('iss-nextpass-banner');
+  if (!banner) return;
+  banner.style.display = 'block';
+  document.getElementById('iss-nextpass-time').textContent = 'Nessun passaggio visibile';
+  document.getElementById('iss-nextpass-detail').textContent = 'Nei prossimi 10 giorni nessun passaggio visibile dalla tua posizione';
+  document.getElementById('iss-nextpass-countdown').textContent = '';
+}
+
+function renderNextPassBanner() {
+  const banner = document.getElementById('iss-nextpass-banner');
+  if (!banner || !issNextPassData) return;
+  banner.style.display = 'block';
+  const pass   = issNextPassData;
+  const riseUTC = new Date(pass.rise.time);
+  const maxElev = Math.round(pass.culmination.elevation_deg);
+  const dur     = Math.round(pass.duration_sec / 60);
+  const riseAz  = pass.rise.compass  || Math.round(pass.rise.azimuth_deg) + '°';
+  const setAz   = pass.set.compass   || Math.round(pass.set.azimuth_deg)  + '°';
+  const timeEl  = document.getElementById('iss-nextpass-time');
+  const detEl   = document.getElementById('iss-nextpass-detail');
+  if (timeEl) timeEl.textContent = riseUTC.toLocaleString('it-IT', {
+    weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'
+  });
+  if (detEl) detEl.textContent = `Elevazione max: ${maxElev}° · Durata: ~${dur} min · ${riseAz} → ${setAz}`;
+  updateNextPassCountdown();
+}
+
+function updateNextPassCountdown() {
+  if (!issNextPassData) return;
+  const el   = document.getElementById('iss-nextpass-countdown');
+  if (!el) return;
+  const now  = Date.now();
+  const rise = new Date(issNextPassData.rise.time).getTime();
+  const set  = new Date(issNextPassData.set.time).getTime();
+  const diff = rise - now;
+  if (diff <= 0 && now < set) {
+    el.textContent = '🛸 PASSAGGIO IN CORSO!';
+    el.style.color = '#6ecba8';
+    return;
+  }
+  if (now >= set) {
+    el.textContent = '✅ Passaggio concluso';
+    el.style.color = 'var(--muted)';
+    if (issCountdownTimer) { clearInterval(issCountdownTimer); issCountdownTimer = null; }
+    setTimeout(fetchISSNextPass, 30000);
+    return;
+  }
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  el.style.color = diff < 600000 ? '#6ecba8' : '#c8a96e';
+  el.textContent = h > 0 ? `⏱ Tra ${h}h ${m}m ${s}s` : m > 0 ? `⏱ Tra ${m}m ${s}s` : `⏱ Tra ${s}s`;
+}
+
+// ── ISS AR + Notifiche ────────────────────────────────────────
 const ISS_AR = {
   active: false,
   orientHandler: null,
