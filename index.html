@@ -2556,11 +2556,16 @@ let gfsSpeed = 700;
 let gfsVar = 'temp';
 let gfsOverlays = [];
 
-// Griglia 4x4 centrata sull'Italia meridionale
+// Griglia Europa (step 2°) — copre da Nord Africa/Mediterraneo a Scandinavia
+const GFS_LATS = [];
+for (let lat = 34; lat <= 70; lat += 2.0) GFS_LATS.push(+lat.toFixed(1));
+const GFS_LONS = [];
+for (let lon = -10; lon <= 38; lon += 2.0) GFS_LONS.push(+lon.toFixed(1));
+
 const GFS_GRID = [];
-for (let lat = 36.5; lat <= 42.5; lat += 2.0) {
-  for (let lon = 12.5; lon <= 18.5; lon += 2.0) {
-    GFS_GRID.push({ lat: +lat.toFixed(1), lon: +lon.toFixed(1) });
+for (const lat of GFS_LATS) {
+  for (const lon of GFS_LONS) {
+    GFS_GRID.push({ lat, lon });
   }
 }
 
@@ -3003,7 +3008,8 @@ function renderModelsShell() {
       </div>
       <div class="model-info-card">
         <strong>GFS (Global Forecast System)</strong> — modello globale NOAA/NCEP aggiornato ogni 6h.
-        Temperatura e vento al livello 850 hPa (~1500 m). Dati via <strong>Open-Meteo</strong>, 5 giorni ogni 3h.
+        Temperatura e vento al livello 850 hPa (~1500 m) su tutta Europa, isoterme ogni 5°C con etichetta.
+        Dati via <strong>Open-Meteo</strong>, 5 giorni ogni 3h.
       </div>
     </div>
 
@@ -3096,27 +3102,21 @@ function renderModelsShell() {
 async function fetchGFSData() {
   const det = document.getElementById('gfs-load-detail');
   try {
-    // Fetch tutti i punti in parallelo — parametri corretti Open-Meteo
-    // temperature_850hPa, windspeed_850hPa, winddirection_850hPa sono i nomi ufficiali
-    const urls = GFS_GRID.map(p =>
-      `https://api.open-meteo.com/v1/forecast?latitude=${p.lat}&longitude=${p.lon}` +
+    if (det) det.textContent = `Griglia Europa: ${GFS_GRID.length} punti (1 richiesta)...`;
+
+    // Richiesta batch unica: Open-Meteo supporta coordinate multiple separate da virgola
+    const latParam = GFS_GRID.map(p => p.lat).join(',');
+    const lonParam = GFS_GRID.map(p => p.lon).join(',');
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latParam}&longitude=${lonParam}` +
       `&hourly=temperature_850hPa,windspeed_850hPa,winddirection_850hPa` +
-      `&forecast_days=5&timeformat=unixtime`
-    );
+      `&forecast_days=5&timeformat=unixtime`;
 
-    if (det) det.textContent = `0 / ${urls.length} punti...`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const results = Array.isArray(data) ? data : [data];
 
-    // Fetch sequenziali a gruppi di 4 per non sovraccaricare
-    const results = [];
-    for (let i = 0; i < urls.length; i += 4) {
-      const batch = urls.slice(i, i+4).map(u => fetch(u).then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      }));
-      const batchRes = await Promise.all(batch);
-      results.push(...batchRes);
-      if (det) det.textContent = `${Math.min(i+4, urls.length)} / ${urls.length} punti...`;
-    }
+    if (!results[0] || !results[0].hourly) throw new Error('risposta senza dati orari');
 
     // Estrai ore dal primo risultato
     gfsHours = results[0].hourly.time; // unix timestamps
@@ -3127,12 +3127,12 @@ async function fetchGFSData() {
     gfsHours = idxs.map(i=>gfsHours[i]);
 
     gfsDataGrid = GFS_GRID.map((p, ri) => {
-      const h = results[ri].hourly;
+      const h = results[ri] && results[ri].hourly;
       return {
         lat: p.lat, lon: p.lon,
-        temps:  idxs.map(i => h.temperature_850hPa?.[i] ?? null),
-        wspeed: idxs.map(i => h.windspeed_850hPa?.[i] ?? null),
-        wdir:   idxs.map(i => h.winddirection_850hPa?.[i] ?? null),
+        temps:  h ? idxs.map(i => h.temperature_850hPa?.[i] ?? null) : idxs.map(()=>null),
+        wspeed: h ? idxs.map(i => h.windspeed_850hPa?.[i] ?? null) : idxs.map(()=>null),
+        wdir:   h ? idxs.map(i => h.winddirection_850hPa?.[i] ?? null) : idxs.map(()=>null),
       };
     });
 
@@ -3157,6 +3157,46 @@ async function fetchGFSData() {
   }
 }
 
+// ── Isoterme (marching squares) per la vista Temperatura ──────
+function gfsInterp(v1, v2, level, p1, p2) {
+  const t = (v2 === v1) ? 0.5 : (level - v1) / (v2 - v1);
+  return [p1[0] + t*(p2[0]-p1[0]), p1[1] + t*(p2[1]-p1[1])];
+}
+const GFS_CASE_EDGES = {
+  1:[[3,2]], 2:[[2,1]], 3:[[3,1]], 4:[[0,1]],
+  5:[[3,0],[2,1]], 6:[[0,2]], 7:[[3,0]], 8:[[3,0]],
+  9:[[0,2]], 10:[[0,1],[3,2]], 11:[[0,1]], 12:[[3,1]],
+  13:[[2,1]], 14:[[3,2]]
+};
+function gfsMarchingSquares(grid, lats, lons, level) {
+  const segments = [];
+  for (let i=0;i<lats.length-1;i++){
+    for (let j=0;j<lons.length-1;j++){
+      const tl=grid[i][j], tr=grid[i][j+1], br=grid[i+1][j+1], bl=grid[i+1][j];
+      if ([tl,tr,br,bl].some(v=>v==null)) continue;
+      const c = (tl>=level?8:0)+(tr>=level?4:0)+(br>=level?2:0)+(bl>=level?1:0);
+      if (c===0||c===15) continue;
+      const TL=[lons[j],lats[i]], TR=[lons[j+1],lats[i]], BR=[lons[j+1],lats[i+1]], BL=[lons[j],lats[i+1]];
+      const edgePt = idx => {
+        if (idx===0) return gfsInterp(tl,tr,level,TL,TR);
+        if (idx===1) return gfsInterp(tr,br,level,TR,BR);
+        if (idx===2) return gfsInterp(bl,br,level,BL,BR);
+        if (idx===3) return gfsInterp(tl,bl,level,TL,BL);
+      };
+      (GFS_CASE_EDGES[c]||[]).forEach(([a,b]) => segments.push([edgePt(a), edgePt(b)]));
+    }
+  }
+  return segments;
+}
+function gfsIsoLabelIcon(text, color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:${color};color:#0b1120;font-size:9px;font-weight:700;
+            padding:1px 5px;border-radius:6px;white-space:nowrap;border:1px solid rgba(0,0,0,.25);">${text}°</div>`,
+    iconSize: null
+  });
+}
+
 function gfsDrawFrame(idx) {
   if (!gfsMap || !gfsDataGrid.length) return;
   gfsFrameIndex = idx;
@@ -3172,16 +3212,32 @@ function gfsDrawFrame(idx) {
   if (badge) badge.textContent = d.toLocaleString('it-IT',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
 
   if (gfsVar === 'temp') {
-    gfsDataGrid.forEach(pt => {
-      const val = pt.temps[idx];
-      if (val == null) return;
-      const rect = L.rectangle(
-        [[pt.lat-1.0, pt.lon-1.0],[pt.lat+1.0, pt.lon+1.0]],
-        { color:'none', fillColor: temp850Color(val), fillOpacity: 0.72, weight: 0 }
-      );
-      rect.bindTooltip(`<b>${val.toFixed(1)}°C</b><br>${pt.lat}°N ${pt.lon}°E`,{sticky:true,className:'gfs-tip'});
-      rect.addTo(gfsMap);
-      gfsOverlays.push(rect);
+    // Ricostruisci griglia 2D [lat][lon] per il frame corrente
+    const grid2d = GFS_LATS.map((_, i) =>
+      GFS_LONS.map((_, j) => {
+        const pt = gfsDataGrid[i * GFS_LONS.length + j];
+        return pt ? pt.temps[idx] : null;
+      })
+    );
+    const levels = [-20,-15,-10,-5,0,5,10,15,20,25,30];
+    levels.forEach(level => {
+      const segs = gfsMarchingSquares(grid2d, GFS_LATS, GFS_LONS, level);
+      const color = temp850Color(level);
+      segs.forEach(([p1,p2]) => {
+        const line = L.polyline([[p1[1],p1[0]],[p2[1],p2[0]]], {color, weight:2, opacity:0.9});
+        line.addTo(gfsMap);
+        gfsOverlays.push(line);
+      });
+      if (segs.length) {
+        const step = Math.max(1, Math.floor(segs.length / 3));
+        for (let s=0; s<segs.length; s+=step) {
+          const [p1,p2] = segs[s];
+          const mid = [(p1[1]+p2[1])/2, (p1[0]+p2[0])/2];
+          const marker = L.marker(mid, {icon: gfsIsoLabelIcon(level, color), interactive:false});
+          marker.addTo(gfsMap);
+          gfsOverlays.push(marker);
+        }
+      }
     });
   } else {
     gfsDataGrid.forEach(pt => {
