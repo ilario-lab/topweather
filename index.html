@@ -3168,6 +3168,116 @@ const GFS_CASE_EDGES = {
   9:[[0,2]], 10:[[0,1],[3,2]], 11:[[0,1]], 12:[[3,1]],
   13:[[2,1]], 14:[[3,2]]
 };
+function gfsIsoLabelIcon(text, color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:${color};color:#0b1120;font-size:9px;font-weight:700;
+            padding:1px 5px;border-radius:6px;white-space:nowrap;border:1px solid rgba(0,0,0,.25);">${text}°</div>`,
+    iconSize: null
+  });
+}
+
+// ── Upscaling bicubico (Catmull-Rom) per contorni lisci ──────
+function gfsCatmullRom1D(p0,p1,p2,p3,t){
+  const t2=t*t, t3=t2*t;
+  return 0.5*((2*p1) + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
+}
+function gfsClampIdx(i,n){ return Math.max(0, Math.min(n-1, i)); }
+
+function gfsBicubicUpsample(grid, lats, lons, factor) {
+  const nLat = lats.length, nLon = lons.length;
+  const outLats = [], outLons = [];
+  for (let i=0; i<=(nLat-1)*factor; i++){
+    const fi = i/factor, i0 = Math.floor(fi);
+    outLats.push(lats[gfsClampIdx(i0,nLat)] + (fi-i0)*((lats[gfsClampIdx(i0+1,nLat)]-lats[gfsClampIdx(i0,nLat)])||0));
+  }
+  for (let j=0; j<=(nLon-1)*factor; j++){
+    const fj = j/factor, j0 = Math.floor(fj);
+    outLons.push(lons[gfsClampIdx(j0,nLon)] + (fj-j0)*((lons[gfsClampIdx(j0+1,nLon)]-lons[gfsClampIdx(j0,nLon)])||0));
+  }
+
+  // Passo 1: interpola lungo le longitudini per ogni riga originale
+  const rowInterp = grid.map(row => {
+    const out = [];
+    for (let j=0; j<=(nLon-1)*factor; j++){
+      const fj = j/factor, j0 = Math.floor(fj), t = fj-j0;
+      const p0=row[gfsClampIdx(j0-1,nLon)], p1=row[gfsClampIdx(j0,nLon)],
+            p2=row[gfsClampIdx(j0+1,nLon)], p3=row[gfsClampIdx(j0+2,nLon)];
+      if ([p0,p1,p2,p3].some(v=>v==null)) { out.push(p1==null?p2:p1); continue; }
+      out.push(gfsCatmullRom1D(p0,p1,p2,p3,t));
+    }
+    return out;
+  });
+
+  // Passo 2: interpola lungo le latitudini sulle colonne già infittite
+  const fineGrid = [];
+  for (let i=0; i<=(nLat-1)*factor; i++){
+    const fi = i/factor, i0 = Math.floor(fi), t = fi-i0;
+    const row = [];
+    for (let j=0; j<rowInterp[0].length; j++){
+      const p0=rowInterp[gfsClampIdx(i0-1,nLat)][j], p1=rowInterp[gfsClampIdx(i0,nLat)][j],
+            p2=rowInterp[gfsClampIdx(i0+1,nLat)][j], p3=rowInterp[gfsClampIdx(i0+2,nLat)][j];
+      if ([p0,p1,p2,p3].some(v=>v==null)) { row.push(p1==null?p2:p1); continue; }
+      row.push(gfsCatmullRom1D(p0,p1,p2,p3,t));
+    }
+    fineGrid.push(row);
+  }
+  return { grid: fineGrid, lats: outLats, lons: outLons };
+}
+
+// ── Concatena segmenti sparsi in linee continue ordinate ──────
+function gfsChainSegments(segments) {
+  const key = p => p[0].toFixed(3) + ',' + p[1].toFixed(3);
+  const used = new Array(segments.length).fill(false);
+  const byEndpoint = new Map();
+  segments.forEach((seg, idx) => {
+    [0,1].forEach(end => {
+      const k = key(seg[end]);
+      if (!byEndpoint.has(k)) byEndpoint.set(k, []);
+      byEndpoint.get(k).push({idx, end});
+    });
+  });
+  const chains = [];
+  for (let s=0; s<segments.length; s++){
+    if (used[s]) continue;
+    used[s] = true;
+    let chain = [segments[s][0], segments[s][1]];
+    // estendi in avanti
+    let growing = true;
+    while (growing) {
+      growing = false;
+      const tail = chain[chain.length-1];
+      const candidates = byEndpoint.get(key(tail)) || [];
+      for (const c of candidates) {
+        if (used[c.idx]) continue;
+        const seg = segments[c.idx];
+        const nextPt = c.end === 0 ? seg[1] : seg[0];
+        chain.push(nextPt);
+        used[c.idx] = true;
+        growing = true;
+        break;
+      }
+    }
+    chains.push(chain);
+  }
+  return chains;
+}
+
+function gfsChaikinSmooth(points, iterations) {
+  let pts = points;
+  for (let it=0; it<iterations; it++){
+    const out = [pts[0]];
+    for (let i=0; i<pts.length-1; i++){
+      const [x0,y0]=pts[i], [x1,y1]=pts[i+1];
+      out.push([x0+0.25*(x1-x0), y0+0.25*(y1-y0)]);
+      out.push([x0+0.75*(x1-x0), y0+0.75*(y1-y0)]);
+    }
+    out.push(pts[pts.length-1]);
+    pts = out;
+  }
+  return pts;
+}
+
 function gfsMarchingSquares(grid, lats, lons, level) {
   const segments = [];
   for (let i=0;i<lats.length-1;i++){
@@ -3187,14 +3297,6 @@ function gfsMarchingSquares(grid, lats, lons, level) {
     }
   }
   return segments;
-}
-function gfsIsoLabelIcon(text, color) {
-  return L.divIcon({
-    className: '',
-    html: `<div style="background:${color};color:#0b1120;font-size:9px;font-weight:700;
-            padding:1px 5px;border-radius:6px;white-space:nowrap;border:1px solid rgba(0,0,0,.25);">${text}°</div>`,
-    iconSize: null
-  });
 }
 
 function gfsDrawFrame(idx) {
@@ -3219,25 +3321,26 @@ function gfsDrawFrame(idx) {
         return pt ? pt.temps[idx] : null;
       })
     );
+    // Infittisce la griglia (Catmull-Rom) prima di tracciare i contorni: linee lisce come nei siti professionali
+    const fine = gfsBicubicUpsample(grid2d, GFS_LATS, GFS_LONS, 4);
     const levels = [-20,-15,-10,-5,0,5,10,15,20,25,30];
     levels.forEach(level => {
-      const segs = gfsMarchingSquares(grid2d, GFS_LATS, GFS_LONS, level);
+      const segs = gfsMarchingSquares(fine.grid, fine.lats, fine.lons, level);
+      const chains = gfsChainSegments(segs);
       const color = temp850Color(level);
-      segs.forEach(([p1,p2]) => {
-        const line = L.polyline([[p1[1],p1[0]],[p2[1],p2[0]]], {color, weight:2, opacity:0.9});
+      chains.forEach(chain => {
+        if (chain.length < 2) return;
+        const smooth = gfsChaikinSmooth(chain, 2);
+        const line = L.polyline(smooth.map(([lon,lat]) => [lat,lon]), {color, weight:2, opacity:0.9, smoothFactor:1});
         line.addTo(gfsMap);
         gfsOverlays.push(line);
-      });
-      if (segs.length) {
-        const step = Math.max(1, Math.floor(segs.length / 3));
-        for (let s=0; s<segs.length; s+=step) {
-          const [p1,p2] = segs[s];
-          const mid = [(p1[1]+p2[1])/2, (p1[0]+p2[0])/2];
-          const marker = L.marker(mid, {icon: gfsIsoLabelIcon(level, color), interactive:false});
+        if (chain.length >= 6) {
+          const mid = chain[Math.floor(chain.length/2)];
+          const marker = L.marker([mid[1], mid[0]], {icon: gfsIsoLabelIcon(level, color), interactive:false});
           marker.addTo(gfsMap);
           gfsOverlays.push(marker);
         }
-      }
+      });
     });
   } else {
     gfsDataGrid.forEach(pt => {
