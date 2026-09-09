@@ -2556,6 +2556,18 @@ let gfsSpeed = 700;
 let gfsVar = 'temp';
 let gfsOverlays = [];
 
+// Stato ICON 850hPa (stessa griglia/engine di GFS, modello diverso)
+let icon850Initialized = false;
+let icon850Playing = false;
+let icon850Timer = null;
+let icon850FrameIndex = 0;
+let icon850Hours = [];
+let icon850DataGrid = [];
+let icon850Map = null;
+let icon850Speed = 700;
+let icon850Var = 'temp';
+let icon850Overlays = [];
+
 // Griglia Europa (step 2°) — copre da Nord Africa/Mediterraneo a Scandinavia
 const GFS_LATS = [];
 for (let lat = 34; lat <= 70; lat += 2.0) GFS_LATS.push(+lat.toFixed(1));
@@ -2587,6 +2599,23 @@ function temp850Color(t) {
   return 'rgba(200,0,0,0.70)';
 }
 
+function temp850ColorRGB(t) {
+  const stops = [
+    [-20,[130,0,200]],[-10,[0,0,255]],[0,[0,180,255]],
+    [5,[0,220,120]],[10,[100,230,0]],[15,[255,230,0]],
+    [20,[255,140,0]],[25,[255,50,0]],[30,[200,0,0]]
+  ];
+  t = Math.max(-20, Math.min(30, t));
+  for (let i = 0; i < stops.length-1; i++) {
+    const [t0,c0] = stops[i], [t1,c1] = stops[i+1];
+    if (t >= t0 && t <= t1) {
+      const f = (t-t0)/(t1-t0);
+      return [~~(c0[0]+(c1[0]-c0[0])*f), ~~(c0[1]+(c1[1]-c0[1])*f), ~~(c0[2]+(c1[2]-c0[2])*f)];
+    }
+  }
+  return [200,0,0];
+}
+
 let gfsSubTab = 'gfs850'; // 'gfs850' | 'icon' | 'ecmwf' | 'lightning'
 
 function initGFS() {
@@ -2594,6 +2623,13 @@ function initGFS() {
   gfsInitialized = true;
   renderModelsShell();
   setTimeout(fetchGFSData, 100);
+}
+
+// Init mappa + dati ICON 850hPa (chiamato al primo click sul sotto-tab)
+function initICON850() {
+  icon850Map = L.map('icon850-map', { center:[39.0,15.5], zoom:5, zoomControl:true, attributionControl:false });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:10}).addTo(icon850Map);
+  fetchICON850Data();
 }
 
 function switchMareSub(name, btn) {
@@ -2923,6 +2959,10 @@ function switchModelSub(name, btn) {
   if (panel) panel.classList.add('active');
 
   if (name === 'gfs850' && gfsMap) setTimeout(() => gfsMap.invalidateSize(), 120);
+  if (name === 'icon850') {
+    if (!icon850Initialized) { icon850Initialized = true; setTimeout(initICON850, 80); }
+    else if (icon850Map) setTimeout(() => icon850Map.invalidateSize(), 120);
+  }
   if (name === 'ecmwf')    loadModelChart('ecmwf',    'ecmwf-content');
   if (name === 'icon')     loadModelChart('icon_seamless', 'icon-content');
   if (name === 'ensemble') loadEnsembleChart('ensemble-content');
@@ -2935,33 +2975,33 @@ function switchModelSub(name, btn) {
 function renderModelsShell() {
   document.getElementById('gfs-content').innerHTML = `
     <style>
-      .gfs-var-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 16px 8px}
-      .gfs-var-btn{padding:9px 4px;border-radius:12px;border:1px solid var(--glass-border);
+      .gfs-var-row,.icon850-var-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 16px 8px}
+      .gfs-var-btn,.icon850-var-btn{padding:9px 4px;border-radius:12px;border:1px solid var(--glass-border);
         background:var(--glass);color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;text-align:center}
-      .gfs-var-btn.active{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.4);color:var(--gold)}
-      .gfs-map-wrap{margin:0 16px;border-radius:16px;overflow:hidden;
+      .gfs-var-btn.active,.icon850-var-btn.active{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.4);color:var(--gold)}
+      .gfs-map-wrap,.icon850-map-wrap{margin:0 16px;border-radius:16px;overflow:hidden;
         border:1px solid var(--glass-border);position:relative;background:#060e1f}
-      #gfs-map{width:100%;height:310px}
-      .gfs-badge{position:absolute;top:8px;left:8px;z-index:1000;
+      #gfs-map,#icon850-map{width:100%;height:310px}
+      .gfs-badge,.icon850-badge{position:absolute;top:8px;left:8px;z-index:1000;
         background:rgba(0,0,0,.78);color:#fff;font-size:11px;font-weight:700;
         padding:4px 10px;border-radius:10px;backdrop-filter:blur(4px);pointer-events:none}
-      .gfs-prog-bar{height:2px;background:var(--glass-border);margin:0 16px 4px;border-radius:2px;overflow:hidden}
-      .gfs-prog-fill{height:100%;background:var(--gold);border-radius:2px;transition:width .15s}
-      .gfs-controls{display:flex;align-items:center;gap:8px;padding:10px 16px 4px}
-      .gfs-play{width:40px;height:40px;border-radius:50%;border:none;background:var(--gold);
+      .gfs-prog-bar,.icon850-prog-bar{height:2px;background:var(--glass-border);margin:0 16px 4px;border-radius:2px;overflow:hidden}
+      .gfs-prog-fill,.icon850-prog-fill{height:100%;background:var(--gold);border-radius:2px;transition:width .15s}
+      .gfs-controls,.icon850-controls{display:flex;align-items:center;gap:8px;padding:10px 16px 4px}
+      .gfs-play,.icon850-play{width:40px;height:40px;border-radius:50%;border:none;background:var(--gold);
         color:#000;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-      .gfs-slider{flex:1;accent-color:var(--gold);cursor:pointer}
-      .gfs-lbl{font-size:11px;color:var(--muted);min-width:40px;text-align:right;font-weight:600}
-      .gfs-spd-row{display:flex;gap:6px;padding:0 16px 8px}
-      .gfs-spd{flex:1;padding:5px;border-radius:8px;border:1px solid var(--glass-border);
+      .gfs-slider,.icon850-slider{flex:1;accent-color:var(--gold);cursor:pointer}
+      .gfs-lbl,.icon850-lbl{font-size:11px;color:var(--muted);min-width:40px;text-align:right;font-weight:600}
+      .gfs-spd-row,.icon850-spd-row{display:flex;gap:6px;padding:0 16px 8px}
+      .gfs-spd,.icon850-spd{flex:1;padding:5px;border-radius:8px;border:1px solid var(--glass-border);
         background:var(--glass);color:var(--muted);font-size:10px;cursor:pointer;text-align:center}
-      .gfs-spd.active{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.4);color:var(--gold)}
-      .gfs-legend{display:flex;align-items:center;gap:6px;padding:2px 16px 6px}
-      .gfs-leg-bar{flex:1;height:9px;border-radius:4px;
+      .gfs-spd.active,.icon850-spd.active{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.4);color:var(--gold)}
+      .gfs-legend,.icon850-legend{display:flex;align-items:center;gap:6px;padding:2px 16px 6px}
+      .gfs-leg-bar,.icon850-leg-bar{flex:1;height:9px;border-radius:4px;
         background:linear-gradient(to right,#8200c8,#00f,#00b4ff,#00dc78,#64e600,#ffe600,#ff8c00,#f32,#c80000)}
-      .gfs-leg-lbl{font-size:9px;color:var(--muted);white-space:nowrap}
-      .gfs-info{font-size:10px;color:var(--muted);text-align:center;padding:0 16px 8px;opacity:.75}
-      .gfs-load{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+      .gfs-leg-lbl,.icon850-leg-lbl{font-size:9px;color:var(--muted);white-space:nowrap}
+      .gfs-info,.icon850-info{font-size:10px;color:var(--muted);text-align:center;padding:0 16px 8px;opacity:.75}
+      .gfs-load,.icon850-load{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
         justify-content:center;background:rgba(6,14,31,.88);z-index:2000;border-radius:16px;
         gap:8px;color:var(--muted);font-size:12px;text-align:center;padding:16px}
     </style>
@@ -2969,6 +3009,7 @@ function renderModelsShell() {
     <!-- SUB-TABS -->
     <div class="model-subtabs">
       <div class="model-subtab active" onclick="switchModelSub('gfs850',this)">🌡 GFS 850 hPa</div>
+      <div class="model-subtab" onclick="switchModelSub('icon850',this)">🇩🇪 ICON 850 hPa</div>
       <div class="model-subtab" onclick="switchModelSub('ecmwf',this)">🌍 ECMWF IFS</div>
       <div class="model-subtab" onclick="switchModelSub('icon',this)">🇩🇪 ICON-EU</div>
       <div class="model-subtab" onclick="switchModelSub('ensemble',this)">📊 Ensemble</div>
@@ -3009,6 +3050,44 @@ function renderModelsShell() {
       <div class="model-info-card">
         <strong>GFS (Global Forecast System)</strong> — modello globale NOAA/NCEP aggiornato ogni 6h.
         Temperatura e vento al livello 850 hPa (~1500 m) su tutta Europa, isoterme ogni 5°C con etichetta.
+        Dati via <strong>Open-Meteo</strong>, 5 giorni ogni 3h.
+      </div>
+    </div>
+
+    <!-- ICON 850 sub-panel -->
+    <div class="model-subpanel" id="msub-icon850">
+      <div class="icon850-var-row">
+        <button class="icon850-var-btn active" onclick="icon850SetVar('temp',this)">🌡 T 850 hPa</button>
+        <button class="icon850-var-btn" onclick="icon850SetVar('wind',this)">💨 Vento 850 hPa</button>
+      </div>
+      <div class="icon850-map-wrap">
+        <div id="icon850-map"></div>
+        <div class="icon850-badge" id="icon850-badge">—</div>
+        <div class="icon850-load" id="icon850-load">
+          <div style="font-size:26px">🇩🇪</div>
+          <div>Scarico dati ICON...</div>
+          <div id="icon850-load-detail" style="font-size:10px;opacity:.6"></div>
+        </div>
+      </div>
+      <div class="icon850-prog-bar"><div id="icon850-prog" class="icon850-prog-fill" style="width:0%"></div></div>
+      <div class="icon850-controls">
+        <button class="icon850-play" id="icon850-playbtn" onclick="toggleICON850Play()">▶</button>
+        <input type="range" class="icon850-slider" id="icon850-slider" min="0" max="0" value="0" oninput="icon850Seek(this.value)">
+        <span class="icon850-lbl" id="icon850-lbl">—</span>
+      </div>
+      <div class="icon850-spd-row">
+        <button class="icon850-spd" onclick="icon850SetSpd(1400,this)">🐢 Lento</button>
+        <button class="icon850-spd active" onclick="icon850SetSpd(700,this)">▶ Norm.</button>
+        <button class="icon850-spd" onclick="icon850SetSpd(200,this)">⚡ Rapido</button>
+      </div>
+      <div class="icon850-legend" id="icon850-legend">
+        <span class="icon850-leg-lbl">-20°C</span>
+        <div class="icon850-leg-bar"></div>
+        <span class="icon850-leg-lbl">+30°C</span>
+      </div>
+      <div class="model-info-card">
+        <strong>ICON (DWD)</strong> — modello del servizio meteorologico tedesco, variante seamless (globale + EU ad alta risoluzione).
+        Temperatura e vento al livello 850 hPa su tutta Europa, isoterme ogni 5°C con etichetta.
         Dati via <strong>Open-Meteo</strong>, 5 giorni ogni 3h.
       </div>
     </div>
@@ -3157,6 +3236,61 @@ async function fetchGFSData() {
   }
 }
 
+// Stessa griglia/logica di fetchGFSData, ma modello ICON (icon_seamless) invece di GFS
+async function fetchICON850Data() {
+  const det = document.getElementById('icon850-load-detail');
+  try {
+    if (det) det.textContent = `Griglia Europa: ${GFS_GRID.length} punti (1 richiesta)...`;
+
+    const latParam = GFS_GRID.map(p => p.lat).join(',');
+    const lonParam = GFS_GRID.map(p => p.lon).join(',');
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latParam}&longitude=${lonParam}` +
+      `&hourly=temperature_850hPa,windspeed_850hPa,winddirection_850hPa` +
+      `&models=icon_seamless&forecast_days=5&timeformat=unixtime`;
+
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const results = Array.isArray(data) ? data : [data];
+
+    if (!results[0] || !results[0].hourly) throw new Error('risposta senza dati orari');
+
+    icon850Hours = results[0].hourly.time;
+
+    const stride = 3;
+    const idxs = icon850Hours.map((_,i)=>i).filter(i=>i%stride===0);
+    icon850Hours = idxs.map(i=>icon850Hours[i]);
+
+    icon850DataGrid = GFS_GRID.map((p, ri) => {
+      const h = results[ri] && results[ri].hourly;
+      return {
+        lat: p.lat, lon: p.lon,
+        temps:  h ? idxs.map(i => h.temperature_850hPa?.[i] ?? null) : idxs.map(()=>null),
+        wspeed: h ? idxs.map(i => h.windspeed_850hPa?.[i] ?? null) : idxs.map(()=>null),
+        wdir:   h ? idxs.map(i => h.winddirection_850hPa?.[i] ?? null) : idxs.map(()=>null),
+      };
+    });
+
+    const ld = document.getElementById('icon850-load');
+    if (ld) ld.style.display = 'none';
+
+    const slider = document.getElementById('icon850-slider');
+    if (slider) slider.max = icon850Hours.length - 1;
+
+    icon850DrawFrame(0);
+
+  } catch(e) {
+    const ld = document.getElementById('icon850-load');
+    if (ld) ld.innerHTML = `<div style="font-size:20px">⚠️</div>
+      <div>Errore: ${e.message}</div>
+      <div style="font-size:10px;opacity:.6;margin-top:4px">Riprova tra qualche minuto</div>
+      <button onclick="icon850Initialized=false;initICON850()" style="margin-top:8px;padding:6px 14px;
+        border-radius:8px;border:none;background:var(--gold);color:#000;cursor:pointer;font-size:11px">
+        ↺ Riprova
+      </button>`;
+  }
+}
+
 // ── Isoterme (marching squares) per la vista Temperatura ──────
 function gfsInterp(v1, v2, level, p1, p2) {
   const t = (v2 === v1) ? 0.5 : (level - v1) / (v2 - v1);
@@ -3278,6 +3412,27 @@ function gfsChaikinSmooth(points, iterations) {
   return pts;
 }
 
+// ── Raster colorato tra le isoterme (riempimento pieno) ──────
+function gfsColorRasterDataURL(fineGrid, fineLats, fineLons) {
+  const w = fineLons.length, h = fineLats.length;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(w, h);
+  for (let i=0; i<h; i++){
+    const destRow = h - 1 - i; // riga 0 dell'immagine = nord (lat massima)
+    for (let j=0; j<w; j++){
+      const val = fineGrid[i][j];
+      const di = (destRow*w + j) * 4;
+      if (val == null) { imgData.data[di+3] = 0; continue; }
+      const [r,g,b] = temp850ColorRGB(val);
+      imgData.data[di] = r; imgData.data[di+1] = g; imgData.data[di+2] = b; imgData.data[di+3] = 165;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+  return canvas.toDataURL();
+}
+
 function gfsMarchingSquares(grid, lats, lons, level) {
   const segments = [];
   for (let i=0;i<lats.length-1;i++){
@@ -3323,6 +3478,14 @@ function gfsDrawFrame(idx) {
     );
     // Infittisce la griglia (Catmull-Rom) prima di tracciare i contorni: linee lisce come nei siti professionali
     const fine = gfsBicubicUpsample(grid2d, GFS_LATS, GFS_LONS, 4);
+
+    // Riempimento a colori pieni tra le isoterme
+    const rasterUrl = gfsColorRasterDataURL(fine.grid, fine.lats, fine.lons);
+    const rasterBounds = [[fine.lats[0], fine.lons[0]], [fine.lats[fine.lats.length-1], fine.lons[fine.lons.length-1]]];
+    const raster = L.imageOverlay(rasterUrl, rasterBounds, {opacity: 1, interactive: false});
+    raster.addTo(gfsMap);
+    gfsOverlays.push(raster);
+
     const levels = [-20,-15,-10,-5,0,5,10,15,20,25,30];
     levels.forEach(level => {
       const segs = gfsMarchingSquares(fine.grid, fine.lats, fine.lons, level);
@@ -3396,6 +3559,107 @@ function gfsSetVar(v,btn) {
   const leg=document.getElementById('gfs-legend');
   if(leg) leg.style.display=v==='temp'?'flex':'none';
   if(gfsDataGrid.length) gfsDrawFrame(gfsFrameIndex);
+}
+
+// ── ICON 850hPa: stesso disegno di gfsDrawFrame, dati/stato separati ──
+function icon850DrawFrame(idx) {
+  if (!icon850Map || !icon850DataGrid.length) return;
+  icon850FrameIndex = idx;
+
+  icon850Overlays.forEach(l => icon850Map.removeLayer(l));
+  icon850Overlays = [];
+
+  const ts = icon850Hours[idx] * 1000;
+  const d = new Date(ts);
+  const badge = document.getElementById('icon850-badge');
+  if (badge) badge.textContent = d.toLocaleString('it-IT',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+
+  if (icon850Var === 'temp') {
+    const grid2d = GFS_LATS.map((_, i) =>
+      GFS_LONS.map((_, j) => {
+        const pt = icon850DataGrid[i * GFS_LONS.length + j];
+        return pt ? pt.temps[idx] : null;
+      })
+    );
+    const fine = gfsBicubicUpsample(grid2d, GFS_LATS, GFS_LONS, 4);
+
+    const rasterUrl = gfsColorRasterDataURL(fine.grid, fine.lats, fine.lons);
+    const rasterBounds = [[fine.lats[0], fine.lons[0]], [fine.lats[fine.lats.length-1], fine.lons[fine.lons.length-1]]];
+    const raster = L.imageOverlay(rasterUrl, rasterBounds, {opacity: 1, interactive: false});
+    raster.addTo(icon850Map);
+    icon850Overlays.push(raster);
+
+    const levels = [-20,-15,-10,-5,0,5,10,15,20,25,30];
+    levels.forEach(level => {
+      const segs = gfsMarchingSquares(fine.grid, fine.lats, fine.lons, level);
+      const chains = gfsChainSegments(segs);
+      const color = temp850Color(level);
+      chains.forEach(chain => {
+        if (chain.length < 2) return;
+        const smooth = gfsChaikinSmooth(chain, 2);
+        const line = L.polyline(smooth.map(([lon,lat]) => [lat,lon]), {color, weight:2, opacity:0.9, smoothFactor:1});
+        line.addTo(icon850Map);
+        icon850Overlays.push(line);
+        if (chain.length >= 6) {
+          const mid = chain[Math.floor(chain.length/2)];
+          const marker = L.marker([mid[1], mid[0]], {icon: gfsIsoLabelIcon(level, color), interactive:false});
+          marker.addTo(icon850Map);
+          icon850Overlays.push(marker);
+        }
+      });
+    });
+  } else {
+    icon850DataGrid.forEach(pt => {
+      const spd = pt.wspeed[idx];
+      const dir = pt.wdir[idx];
+      if (spd == null || dir == null) return;
+      const rad = (dir - 180) * Math.PI / 180;
+      const len = Math.min(0.8 + spd * 0.03, 1.4);
+      const s = [pt.lat - Math.cos(rad)*len, pt.lon - Math.sin(rad)*len];
+      const e = [pt.lat + Math.cos(rad)*len, pt.lon + Math.sin(rad)*len];
+      const t = Math.min(spd/35, 1);
+      const col = `rgb(${~~(t*255)},${~~(200-t*160)},${~~(255-t*220)})`;
+      const line = L.polyline([s,e],{color:col,weight:2.5,opacity:.9});
+      const dot  = L.circleMarker(e,{radius:3,color:col,fillColor:col,fillOpacity:1,weight:0});
+      line.bindTooltip(`<b>${spd.toFixed(0)} km/h</b> da ${dir.toFixed(0)}°`,{sticky:true});
+      line.addTo(icon850Map); dot.addTo(icon850Map);
+      icon850Overlays.push(line, dot);
+    });
+  }
+
+  const pct = (idx / Math.max(icon850Hours.length-1,1)) * 100;
+  const prog = document.getElementById('icon850-prog');
+  if (prog) prog.style.width = pct+'%';
+  const sl = document.getElementById('icon850-slider');
+  if (sl) sl.value = idx;
+  const lbl = document.getElementById('icon850-lbl');
+  if (lbl) lbl.textContent = `+${idx*3}h`;
+}
+
+function icon850Seek(v) { stopICON850Play(); icon850DrawFrame(+v); }
+function toggleICON850Play() { icon850Playing ? stopICON850Play() : startICON850Play(); }
+function startICON850Play() {
+  icon850Playing=true;
+  document.getElementById('icon850-playbtn').textContent='⏸';
+  icon850Timer=setInterval(()=>icon850DrawFrame((icon850FrameIndex+1)%Math.max(icon850Hours.length,1)),icon850Speed);
+}
+function stopICON850Play() {
+  icon850Playing=false; clearInterval(icon850Timer);
+  const b=document.getElementById('icon850-playbtn'); if(b) b.textContent='▶';
+}
+function icon850SetSpd(ms,btn) {
+  icon850Speed=ms;
+  document.querySelectorAll('.icon850-spd').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(icon850Playing){stopICON850Play();startICON850Play();}
+}
+function icon850SetVar(v,btn) {
+  icon850Var=v;
+  document.querySelectorAll('.icon850-var-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const leg=document.getElementById('icon850-legend');
+  if(leg) leg.style.display=v==='temp'?'flex':'none';
+  if(icon850DataGrid.length) icon850DrawFrame(icon850FrameIndex);
 }
 
 
