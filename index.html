@@ -2568,6 +2568,18 @@ let icon850Speed = 700;
 let icon850Var = 'temp';
 let icon850Overlays = [];
 
+// Stato ECMWF Precipitazione (modello più preciso per le precipitazioni — stessa griglia/stile di GFS/ICON 850)
+let precipInitialized = false;
+let precipPlaying = false;
+let precipTimer = null;
+let precipFrameIndex = 0;
+let precipHours = [];
+let precipDataGrid = [];
+let precipMap = null;
+let precipSpeed = 700;
+let precipVar = 'rain'; // 'rain' | 'snow'
+let precipOverlays = [];
+
 // Griglia Europa (step 2°) — copre da Nord Africa/Mediterraneo a Scandinavia
 const GFS_LATS = [];
 for (let lat = 34; lat <= 70; lat += 2.0) GFS_LATS.push(+lat.toFixed(1));
@@ -2963,6 +2975,10 @@ function switchModelSub(name, btn) {
     if (!icon850Initialized) { icon850Initialized = true; setTimeout(initICON850, 80); }
     else if (icon850Map) setTimeout(() => icon850Map.invalidateSize(), 120);
   }
+  if (name === 'precip') {
+    if (!precipInitialized) { precipInitialized = true; setTimeout(initPrecip, 80); }
+    else if (precipMap) setTimeout(() => precipMap.invalidateSize(), 120);
+  }
   if (name === 'ecmwf')    loadModelChart('ecmwf',    'ecmwf-content');
   if (name === 'icon')     loadModelChart('icon_seamless', 'icon-content');
   if (name === 'ensemble') loadEnsembleChart('ensemble-content');
@@ -2975,33 +2991,35 @@ function switchModelSub(name, btn) {
 function renderModelsShell() {
   document.getElementById('gfs-content').innerHTML = `
     <style>
-      .gfs-var-row,.icon850-var-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 16px 8px}
-      .gfs-var-btn,.icon850-var-btn{padding:9px 4px;border-radius:12px;border:1px solid var(--glass-border);
+      .gfs-var-row,.icon850-var-row,.prec-var-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 16px 8px}
+      .gfs-var-btn,.icon850-var-btn,.prec-var-btn{padding:9px 4px;border-radius:12px;border:1px solid var(--glass-border);
         background:var(--glass);color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;text-align:center}
-      .gfs-var-btn.active,.icon850-var-btn.active{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.4);color:var(--gold)}
-      .gfs-map-wrap,.icon850-map-wrap{margin:0 16px;border-radius:16px;overflow:hidden;
+      .gfs-var-btn.active,.icon850-var-btn.active,.prec-var-btn.active{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.4);color:var(--gold)}
+      .gfs-map-wrap,.icon850-map-wrap,.prec-map-wrap{margin:0 16px;border-radius:16px;overflow:hidden;
         border:1px solid var(--glass-border);position:relative;background:#060e1f}
-      #gfs-map,#icon850-map{width:100%;height:310px}
-      .gfs-badge,.icon850-badge{position:absolute;top:8px;left:8px;z-index:1000;
+      #gfs-map,#icon850-map,#precip-map{width:100%;height:310px}
+      .gfs-badge,.icon850-badge,.prec-badge{position:absolute;top:8px;left:8px;z-index:1000;
         background:rgba(0,0,0,.78);color:#fff;font-size:11px;font-weight:700;
         padding:4px 10px;border-radius:10px;backdrop-filter:blur(4px);pointer-events:none}
-      .gfs-prog-bar,.icon850-prog-bar{height:2px;background:var(--glass-border);margin:0 16px 4px;border-radius:2px;overflow:hidden}
-      .gfs-prog-fill,.icon850-prog-fill{height:100%;background:var(--gold);border-radius:2px;transition:width .15s}
-      .gfs-controls,.icon850-controls{display:flex;align-items:center;gap:8px;padding:10px 16px 4px}
-      .gfs-play,.icon850-play{width:40px;height:40px;border-radius:50%;border:none;background:var(--gold);
+      .gfs-prog-bar,.icon850-prog-bar,.prec-prog-bar{height:2px;background:var(--glass-border);margin:0 16px 4px;border-radius:2px;overflow:hidden}
+      .gfs-prog-fill,.icon850-prog-fill,.prec-prog-fill{height:100%;background:var(--gold);border-radius:2px;transition:width .15s}
+      .gfs-controls,.icon850-controls,.prec-controls{display:flex;align-items:center;gap:8px;padding:10px 16px 4px}
+      .gfs-play,.icon850-play,.prec-play{width:40px;height:40px;border-radius:50%;border:none;background:var(--gold);
         color:#000;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-      .gfs-slider,.icon850-slider{flex:1;accent-color:var(--gold);cursor:pointer}
-      .gfs-lbl,.icon850-lbl{font-size:11px;color:var(--muted);min-width:40px;text-align:right;font-weight:600}
-      .gfs-spd-row,.icon850-spd-row{display:flex;gap:6px;padding:0 16px 8px}
-      .gfs-spd,.icon850-spd{flex:1;padding:5px;border-radius:8px;border:1px solid var(--glass-border);
+      .gfs-slider,.icon850-slider,.prec-slider{flex:1;accent-color:var(--gold);cursor:pointer}
+      .gfs-lbl,.icon850-lbl,.prec-lbl{font-size:11px;color:var(--muted);min-width:40px;text-align:right;font-weight:600}
+      .gfs-spd-row,.icon850-spd-row,.prec-spd-row{display:flex;gap:6px;padding:0 16px 8px}
+      .gfs-spd,.icon850-spd,.prec-spd{flex:1;padding:5px;border-radius:8px;border:1px solid var(--glass-border);
         background:var(--glass);color:var(--muted);font-size:10px;cursor:pointer;text-align:center}
-      .gfs-spd.active,.icon850-spd.active{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.4);color:var(--gold)}
-      .gfs-legend,.icon850-legend{display:flex;align-items:center;gap:6px;padding:2px 16px 6px}
+      .gfs-spd.active,.icon850-spd.active,.prec-spd.active{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.4);color:var(--gold)}
+      .gfs-legend,.icon850-legend,.prec-legend{display:flex;align-items:center;gap:6px;padding:2px 16px 6px}
       .gfs-leg-bar,.icon850-leg-bar{flex:1;height:9px;border-radius:4px;
         background:linear-gradient(to right,#8200c8,#00f,#00b4ff,#00dc78,#64e600,#ffe600,#ff8c00,#f32,#c80000)}
-      .gfs-leg-lbl,.icon850-leg-lbl{font-size:9px;color:var(--muted);white-space:nowrap}
-      .gfs-info,.icon850-info{font-size:10px;color:var(--muted);text-align:center;padding:0 16px 8px;opacity:.75}
-      .gfs-load,.icon850-load{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+      .prec-leg-bar{flex:1;height:9px;border-radius:4px;
+        background:linear-gradient(to right,#0a1428,#008cff,#00c8b4,#50dc3c,#ffe600,#ff8c00,#ff003c,#aa0078)}
+      .gfs-leg-lbl,.icon850-leg-lbl,.prec-leg-lbl{font-size:9px;color:var(--muted);white-space:nowrap}
+      .gfs-info,.icon850-info,.prec-info{font-size:10px;color:var(--muted);text-align:center;padding:0 16px 8px;opacity:.75}
+      .gfs-load,.icon850-load,.prec-load{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
         justify-content:center;background:rgba(6,14,31,.88);z-index:2000;border-radius:16px;
         gap:8px;color:var(--muted);font-size:12px;text-align:center;padding:16px}
     </style>
@@ -3010,6 +3028,7 @@ function renderModelsShell() {
     <div class="model-subtabs">
       <div class="model-subtab active" onclick="switchModelSub('gfs850',this)">🌡 GFS 850 hPa</div>
       <div class="model-subtab" onclick="switchModelSub('icon850',this)">🇩🇪 ICON 850 hPa</div>
+      <div class="model-subtab" onclick="switchModelSub('precip',this)">🌧️ ECMWF Pioggia</div>
       <div class="model-subtab" onclick="switchModelSub('ecmwf',this)">🌍 ECMWF IFS</div>
       <div class="model-subtab" onclick="switchModelSub('icon',this)">🇩🇪 ICON-EU</div>
       <div class="model-subtab" onclick="switchModelSub('ensemble',this)">📊 Ensemble</div>
@@ -3088,6 +3107,45 @@ function renderModelsShell() {
       <div class="model-info-card">
         <strong>ICON (DWD)</strong> — modello del servizio meteorologico tedesco, variante seamless (globale + EU ad alta risoluzione).
         Temperatura e vento al livello 850 hPa su tutta Europa, isoterme ogni 5°C con etichetta.
+        Dati via <strong>Open-Meteo</strong>, 5 giorni ogni 3h.
+      </div>
+    </div>
+
+    <!-- ECMWF PRECIPITAZIONE sub-panel (modello più preciso per le precipitazioni) -->
+    <div class="model-subpanel" id="msub-precip">
+      <div class="prec-var-row">
+        <button class="prec-var-btn active" onclick="precipSetVar('rain',this)">🌧️ Pioggia 3h</button>
+        <button class="prec-var-btn" onclick="precipSetVar('snow',this)">❄️ Neve 3h</button>
+      </div>
+      <div class="prec-map-wrap">
+        <div id="precip-map"></div>
+        <div class="prec-badge" id="precip-badge">—</div>
+        <div class="prec-load" id="precip-load">
+          <div style="font-size:26px">🌧️</div>
+          <div>Scarico dati ECMWF...</div>
+          <div id="precip-load-detail" style="font-size:10px;opacity:.6"></div>
+        </div>
+      </div>
+      <div class="prec-prog-bar"><div id="precip-prog" class="prec-prog-fill" style="width:0%"></div></div>
+      <div class="prec-controls">
+        <button class="prec-play" id="precip-playbtn" onclick="togglePrecipPlay()">▶</button>
+        <input type="range" class="prec-slider" id="precip-slider" min="0" max="0" value="0" oninput="precipSeek(this.value)">
+        <span class="prec-lbl" id="precip-lbl">—</span>
+      </div>
+      <div class="prec-spd-row">
+        <button class="prec-spd" onclick="precipSetSpd(1400,this)">🐢 Lento</button>
+        <button class="prec-spd active" onclick="precipSetSpd(700,this)">▶ Norm.</button>
+        <button class="prec-spd" onclick="precipSetSpd(200,this)">⚡ Rapido</button>
+      </div>
+      <div class="prec-legend" id="precip-legend">
+        <span class="prec-leg-lbl" id="precip-leg-lo">0mm</span>
+        <div class="prec-leg-bar"></div>
+        <span class="prec-leg-lbl" id="precip-leg-hi">35+mm</span>
+      </div>
+      <div class="model-info-card">
+        <strong>ECMWF IFS</strong> — modello europeo, considerato dagli studi di verifica il più accurato al mondo per le
+        precipitazioni (QPF), grazie alla qualità dell'assimilazione dati e della fisica del modello.
+        Pioggia e neve cumulate ogni 3h su tutta Europa, celle colorate + isolinee.
         Dati via <strong>Open-Meteo</strong>, 5 giorni ogni 3h.
       </div>
     </div>
@@ -3662,6 +3720,221 @@ function icon850SetVar(v,btn) {
   if(icon850DataGrid.length) icon850DrawFrame(icon850FrameIndex);
 }
 
+
+// ============================================================
+// ECMWF PRECIPITAZIONE — modello più preciso per le precipitazioni
+// Stessa griglia/stile grafico di GFS 850 / ICON 850, dati ECMWF IFS
+// ============================================================
+
+function initPrecip() {
+  precipMap = L.map('precip-map', { center:[39.0,15.5], zoom:5, zoomControl:true, attributionControl:false });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:10}).addTo(precipMap);
+  fetchPrecipData();
+}
+
+// Scala colori precipitazione/neve cumulata 3h (0 = trasparente, salendo verso i temporali intensi)
+function precipColorRGB(v, kind) {
+  const stopsRain = [
+    [0,[10,20,45]],[0.5,[0,140,255]],[2,[0,200,180]],[5,[80,220,60]],
+    [10,[255,230,0]],[20,[255,140,0]],[35,[255,0,60]],[60,[170,0,120]]
+  ];
+  const stopsSnow = [
+    [0,[10,20,45]],[0.5,[70,110,190]],[2,[110,170,255]],[5,[190,215,255]],
+    [10,[255,255,255]],[20,[225,180,255]],[35,[170,80,220]]
+  ];
+  const stops = kind === 'snow' ? stopsSnow : stopsRain;
+  const maxV = stops[stops.length-1][0];
+  v = Math.max(0, Math.min(maxV, v));
+  for (let i = 0; i < stops.length-1; i++) {
+    const [v0,c0] = stops[i], [v1,c1] = stops[i+1];
+    if (v >= v0 && v <= v1) {
+      const f = (v1===v0) ? 0 : (v-v0)/(v1-v0);
+      return [~~(c0[0]+(c1[0]-c0[0])*f), ~~(c0[1]+(c1[1]-c0[1])*f), ~~(c0[2]+(c1[2]-c0[2])*f)];
+    }
+  }
+  return stops[stops.length-1][1];
+}
+function precipColor(v, kind) {
+  const [r,g,b] = precipColorRGB(v, kind);
+  return `rgba(${r},${g},${b},0.85)`;
+}
+function precipIsoLabel(text, color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:${color};color:#0b1120;font-size:9px;font-weight:700;
+            padding:1px 5px;border-radius:6px;white-space:nowrap;border:1px solid rgba(0,0,0,.25);">${text}</div>`,
+    iconSize: null
+  });
+}
+// Raster colorato (celle trasparenti dove non piove/nevica)
+function precipRasterDataURL(fineGrid, fineLats, fineLons, kind) {
+  const w = fineLons.length, h = fineLats.length;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(w, h);
+  for (let i=0; i<h; i++){
+    const destRow = h - 1 - i;
+    for (let j=0; j<w; j++){
+      const val = fineGrid[i][j];
+      const di = (destRow*w + j) * 4;
+      if (val == null || val < 0.1) { imgData.data[di+3] = 0; continue; }
+      const [r,g,b] = precipColorRGB(val, kind);
+      imgData.data[di] = r; imgData.data[di+1] = g; imgData.data[di+2] = b;
+      imgData.data[di+3] = Math.min(60 + val*6, 200);
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+  return canvas.toDataURL();
+}
+
+async function fetchPrecipData() {
+  const det = document.getElementById('precip-load-detail');
+  try {
+    if (det) det.textContent = `Griglia Europa: ${GFS_GRID.length} punti (1 richiesta)...`;
+
+    const latParam = GFS_GRID.map(p => p.lat).join(',');
+    const lonParam = GFS_GRID.map(p => p.lon).join(',');
+    // Endpoint dedicato ECMWF (open-meteo.com/v1/ecmwf) — stessa API di Open-Meteo usata da GFS/ICON
+    const url = `https://api.open-meteo.com/v1/ecmwf?latitude=${latParam}&longitude=${lonParam}` +
+      `&hourly=precipitation,snowfall&forecast_days=5&timeformat=unixtime`;
+
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const results = Array.isArray(data) ? data : [data];
+
+    if (!results[0] || !results[0].hourly) throw new Error('risposta senza dati orari');
+
+    const hoursFull = results[0].hourly.time; // orario, unix timestamps
+    const nBuckets = Math.floor(hoursFull.length / 3);
+    precipHours = Array.from({length: nBuckets}, (_, b) => hoursFull[b*3]);
+
+    // Cumula pioggia/neve orarie in blocchi da 3h (coerente col passo temporale di GFS/ICON 850)
+    precipDataGrid = GFS_GRID.map((p, ri) => {
+      const h = results[ri] && results[ri].hourly;
+      const rain = [], snow = [];
+      for (let b = 0; b < nBuckets; b++) {
+        let rs = 0, ss = 0, any = false;
+        for (let k = 0; k < 3; k++) {
+          const idx = b*3+k;
+          const rv = h ? h.precipitation?.[idx] : null;
+          const sv = h ? h.snowfall?.[idx] : null;
+          if (rv != null) { rs += rv; any = true; }
+          if (sv != null) { ss += sv; any = true; }
+        }
+        rain.push(any ? rs : null);
+        snow.push(any ? ss : null);
+      }
+      return { lat: p.lat, lon: p.lon, rain, snow };
+    });
+
+    const ld = document.getElementById('precip-load');
+    if (ld) ld.style.display = 'none';
+
+    const slider = document.getElementById('precip-slider');
+    if (slider) slider.max = precipHours.length - 1;
+
+    precipDrawFrame(0);
+
+  } catch(e) {
+    const ld = document.getElementById('precip-load');
+    if (ld) ld.innerHTML = `<div style="font-size:20px">⚠️</div>
+      <div>Errore: ${e.message}</div>
+      <div style="font-size:10px;opacity:.6;margin-top:4px">Riprova tra qualche minuto</div>
+      <button onclick="precipInitialized=false;initPrecip()" style="margin-top:8px;padding:6px 14px;
+        border-radius:8px;border:none;background:var(--gold);color:#000;cursor:pointer;font-size:11px">
+        ↺ Riprova
+      </button>`;
+  }
+}
+
+function precipDrawFrame(idx) {
+  if (!precipMap || !precipDataGrid.length) return;
+  precipFrameIndex = idx;
+
+  precipOverlays.forEach(l => precipMap.removeLayer(l));
+  precipOverlays = [];
+
+  const ts = precipHours[idx] * 1000;
+  const d = new Date(ts);
+  const badge = document.getElementById('precip-badge');
+  if (badge) badge.textContent = d.toLocaleString('it-IT',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+
+  const field = precipVar === 'snow' ? 'snow' : 'rain';
+  const unit = precipVar === 'snow' ? 'cm' : 'mm';
+  const levels = precipVar === 'snow' ? [0.5,2,5,10,20] : [0.5,2,5,10,20,35];
+
+  const grid2d = GFS_LATS.map((_, i) =>
+    GFS_LONS.map((_, j) => {
+      const pt = precipDataGrid[i * GFS_LONS.length + j];
+      return pt ? pt[field][idx] : null;
+    })
+  );
+  const fine = gfsBicubicUpsample(grid2d, GFS_LATS, GFS_LONS, 4);
+
+  const rasterUrl = precipRasterDataURL(fine.grid, fine.lats, fine.lons, precipVar);
+  const rasterBounds = [[fine.lats[0], fine.lons[0]], [fine.lats[fine.lats.length-1], fine.lons[fine.lons.length-1]]];
+  const raster = L.imageOverlay(rasterUrl, rasterBounds, {opacity: 1, interactive: false});
+  raster.addTo(precipMap);
+  precipOverlays.push(raster);
+
+  levels.forEach(level => {
+    const segs = gfsMarchingSquares(fine.grid, fine.lats, fine.lons, level);
+    const chains = gfsChainSegments(segs);
+    const color = precipColor(level, precipVar);
+    chains.forEach(chain => {
+      if (chain.length < 2) return;
+      const smooth = gfsChaikinSmooth(chain, 2);
+      const line = L.polyline(smooth.map(([lon,lat]) => [lat,lon]), {color, weight:2, opacity:0.9, smoothFactor:1});
+      line.addTo(precipMap);
+      precipOverlays.push(line);
+      if (chain.length >= 6) {
+        const mid = chain[Math.floor(chain.length/2)];
+        const marker = L.marker([mid[1], mid[0]], {icon: precipIsoLabel(level+unit, color), interactive:false});
+        marker.addTo(precipMap);
+        precipOverlays.push(marker);
+      }
+    });
+  });
+
+  const pct = (idx / Math.max(precipHours.length-1,1)) * 100;
+  const prog = document.getElementById('precip-prog');
+  if (prog) prog.style.width = pct+'%';
+  const sl = document.getElementById('precip-slider');
+  if (sl) sl.value = idx;
+  const lbl = document.getElementById('precip-lbl');
+  if (lbl) lbl.textContent = `+${idx*3}h`;
+}
+
+function precipSeek(v) { stopPrecipPlay(); precipDrawFrame(+v); }
+function togglePrecipPlay() { precipPlaying ? stopPrecipPlay() : startPrecipPlay(); }
+function startPrecipPlay() {
+  precipPlaying=true;
+  document.getElementById('precip-playbtn').textContent='⏸';
+  precipTimer=setInterval(()=>precipDrawFrame((precipFrameIndex+1)%Math.max(precipHours.length,1)),precipSpeed);
+}
+function stopPrecipPlay() {
+  precipPlaying=false; clearInterval(precipTimer);
+  const b=document.getElementById('precip-playbtn'); if(b) b.textContent='▶';
+}
+function precipSetSpd(ms,btn) {
+  precipSpeed=ms;
+  document.querySelectorAll('.prec-spd').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(precipPlaying){stopPrecipPlay();startPrecipPlay();}
+}
+function precipSetVar(v,btn) {
+  precipVar=v;
+  document.querySelectorAll('.prec-var-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const lo=document.getElementById('precip-leg-lo'), hi=document.getElementById('precip-leg-hi');
+  if (lo && hi) {
+    if (v === 'snow') { lo.textContent='0cm'; hi.textContent='20+cm'; }
+    else { lo.textContent='0mm'; hi.textContent='35+mm'; }
+  }
+  if(precipDataGrid.length) precipDrawFrame(precipFrameIndex);
+}
 
 // ============================================================
 // MODELLI PREVISIONALI — ECMWF IFS · ICON-EU · Ensemble
