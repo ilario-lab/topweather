@@ -2338,6 +2338,37 @@ let radarIdx = 0;
 let radarPlaying = false;
 let radarTimer = null;
 let radarCurrentType = 'rainviewer'; // 'rainviewer' | 'sat_ir'
+let radarBaseLayer = null;
+let radarCityMarker = null;
+let radarBasemap = 'dark'; // 'dark' | 'light' | 'sat'
+
+// Sfondi mappa radar (stesso provider CartoDB delle mappe modelli + Esri per il satellite)
+const RADAR_BASEMAPS = {
+  dark:  { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', maxZoom: 18, opacity: 1 },
+  light: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', maxZoom: 18, opacity: 1 },
+  sat:   { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', maxZoom: 18, opacity: 1 }
+};
+
+function applyRadarBasemap() {
+  if (!radarMap) return;
+  const cfg = RADAR_BASEMAPS[radarBasemap] || RADAR_BASEMAPS.dark;
+  if (radarBaseLayer) { radarMap.removeLayer(radarBaseLayer); radarBaseLayer = null; }
+  radarBaseLayer = L.tileLayer(cfg.url, { maxZoom: cfg.maxZoom, opacity: cfg.opacity });
+  radarBaseLayer.addTo(radarMap);
+  // Tiene il basemap sotto radar/satellite e marker
+  if (radarBaseLayer.bringToBack) radarBaseLayer.bringToBack();
+}
+
+function setRadarBasemap(kind, btn) {
+  if (!RADAR_BASEMAPS[kind]) return;
+  radarBasemap = kind;
+  ['btn-base-dark','btn-base-light','btn-base-sat'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.classList.remove('active');
+  });
+  if (btn) btn.classList.add('active');
+  applyRadarBasemap();
+}
 
 function buildRadarPanel() {
   const el = document.createElement('div');
@@ -2371,6 +2402,11 @@ function buildRadarPanel() {
         <div class="radar-layer-btn" id="btn-sat_ir" onclick="setRadarType('sat_ir',this)">🛰 Satellite IR</div>
         <div class="radar-layer-btn" id="btn-sat_vis" onclick="setRadarType('sat_vis',this)">☀️ Satellite VIS</div>
       </div>
+      <div class="radar-layers">
+        <div class="radar-layer-btn active" id="btn-base-dark" onclick="setRadarBasemap('dark',this)">🌑 Scuro</div>
+        <div class="radar-layer-btn" id="btn-base-light" onclick="setRadarBasemap('light',this)">☁️ Chiaro</div>
+        <div class="radar-layer-btn" id="btn-base-sat" onclick="setRadarBasemap('sat',this)">🌍 Satellite</div>
+      </div>
     </div>
     <div class="last-updated" style="margin-top:12px">Dati: RainViewer · aggiornati ogni ~10 min</div>
   `;
@@ -2391,12 +2427,10 @@ async function initRadar() {
       zoomControl: true,
       attributionControl: false,
     });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 18,
-    }).addTo(radarMap);
+    applyRadarBasemap();
 
     // City marker
-    L.circleMarker([currentLat, currentLon], {
+    radarCityMarker = L.circleMarker([currentLat, currentLon], {
       radius: 6, color: '#f5a623', fillColor: '#f5a623', fillOpacity: 1, weight: 2,
     }).addTo(radarMap).bindPopup(currentCity);
   } else {
