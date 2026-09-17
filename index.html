@@ -1454,6 +1454,7 @@ async function fetchQuakesIT(days) {
   const start = new Date(Date.now() - days * 86400000).toISOString().replace('T',' ').slice(0,19);
   const url = `https://webservices.ingv.it/fdsnws/event/1/query?format=geojson`
     + `&starttime=${encodeURIComponent(start)}&endtime=${encodeURIComponent(end)}`
+    + `&minlatitude=35.0&maxlatitude=47.5&minlongitude=6.0&maxlongitude=19.0`
     + `&minmagnitude=1.5&orderby=time&limit=80`;
   const r = await fetch(url);
   if (!r.ok) throw new Error('Errore INGV');
@@ -1583,7 +1584,8 @@ function updateSectionIT() {
     const mapEl = document.getElementById('quakeMapIT');
     if (!mapEl) return;
     quakeMapIT = L.map('quakeMapIT', { center:[42,13], zoom:5, zoomControl:false, attributionControl:false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:18}).addTo(quakeMapIT);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {maxZoom:16}).addTo(quakeMapIT);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {maxZoom:16}).addTo(quakeMapIT);
     quakeMarkersIT = allQuakesIT.map((f, i) => {
       const [lon, lat] = f.geometry.coordinates;
       const m = f.properties.mag ?? 0;
@@ -1614,7 +1616,8 @@ function updateSectionWorld() {
     const mapEl = document.getElementById('quakeMapWorld');
     if (!mapEl) return;
     quakeMapWorld = L.map('quakeMapWorld', { center:[20,0], zoom:2, zoomControl:false, attributionControl:false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:18}).addTo(quakeMapWorld);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {maxZoom:16}).addTo(quakeMapWorld);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {maxZoom:16}).addTo(quakeMapWorld);
     quakeMarkersWorld = allQuakesWorld.map((f, i) => {
       const [lon, lat] = f.geometry.coordinates;
       const m = f.properties.mag ?? 0;
@@ -2338,36 +2341,12 @@ let radarIdx = 0;
 let radarPlaying = false;
 let radarTimer = null;
 let radarCurrentType = 'rainviewer'; // 'rainviewer' | 'sat_ir'
-let radarBaseLayer = null;
 let radarCityMarker = null;
-let radarBasemap = 'dark'; // 'dark' | 'light' | 'sat'
-
-// Sfondi mappa radar (stesso provider CartoDB delle mappe modelli + Esri per il satellite)
-const RADAR_BASEMAPS = {
-  dark:  { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', maxZoom: 18, opacity: 1 },
-  light: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', maxZoom: 18, opacity: 1 },
-  sat:   { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', maxZoom: 18, opacity: 1 }
-};
 
 function applyRadarBasemap() {
   if (!radarMap) return;
-  const cfg = RADAR_BASEMAPS[radarBasemap] || RADAR_BASEMAPS.dark;
-  if (radarBaseLayer) { radarMap.removeLayer(radarBaseLayer); radarBaseLayer = null; }
-  radarBaseLayer = L.tileLayer(cfg.url, { maxZoom: cfg.maxZoom, opacity: cfg.opacity });
-  radarBaseLayer.addTo(radarMap);
-  // Tiene il basemap sotto radar/satellite e marker
-  if (radarBaseLayer.bringToBack) radarBaseLayer.bringToBack();
-}
-
-function setRadarBasemap(kind, btn) {
-  if (!RADAR_BASEMAPS[kind]) return;
-  radarBasemap = kind;
-  ['btn-base-dark','btn-base-light','btn-base-sat'].forEach(id => {
-    const b = document.getElementById(id);
-    if (b) b.classList.remove('active');
-  });
-  if (btn) btn.classList.add('active');
-  applyRadarBasemap();
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(radarMap);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(radarMap);
 }
 
 function buildRadarPanel() {
@@ -2401,11 +2380,6 @@ function buildRadarPanel() {
         <div class="radar-layer-btn active" id="btn-rainviewer" onclick="setRadarType('rainviewer',this)">🌧 Pioggia</div>
         <div class="radar-layer-btn" id="btn-sat_ir" onclick="setRadarType('sat_ir',this)">🛰 Satellite IR</div>
         <div class="radar-layer-btn" id="btn-sat_vis" onclick="setRadarType('sat_vis',this)">☀️ Satellite VIS</div>
-      </div>
-      <div class="radar-layers">
-        <div class="radar-layer-btn active" id="btn-base-dark" onclick="setRadarBasemap('dark',this)">🌑 Scuro</div>
-        <div class="radar-layer-btn" id="btn-base-light" onclick="setRadarBasemap('light',this)">☁️ Chiaro</div>
-        <div class="radar-layer-btn" id="btn-base-sat" onclick="setRadarBasemap('sat',this)">🌍 Satellite</div>
       </div>
     </div>
     <div class="last-updated" style="margin-top:12px">Dati: RainViewer · aggiornati ogni ~10 min</div>
@@ -2674,7 +2648,8 @@ function initGFS() {
 // Init mappa + dati ICON 850hPa (chiamato al primo click sul sotto-tab)
 function initICON850() {
   icon850Map = L.map('icon850-map', { center:[39.0,15.5], zoom:5, zoomControl:true, attributionControl:false });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:10}).addTo(icon850Map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(icon850Map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(icon850Map);
   fetchICON850Data();
 }
 
@@ -3264,7 +3239,8 @@ function renderModelsShell() {
   // Init mappa GFS
   setTimeout(() => {
     gfsMap = L.map('gfs-map', { center:[39.0,15.5], zoom:5, zoomControl:true, attributionControl:false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:10}).addTo(gfsMap);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(gfsMap);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(gfsMap);
     // Avvia polling contatore fulmini
     startLightningCounter();
   }, 80);
@@ -3762,7 +3738,8 @@ function icon850SetVar(v,btn) {
 
 function initPrecip() {
   precipMap = L.map('precip-map', { center:[39.0,15.5], zoom:5, zoomControl:true, attributionControl:false });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:10}).addTo(precipMap);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(precipMap);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(precipMap);
   fetchPrecipData();
 }
 
