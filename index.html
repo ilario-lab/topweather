@@ -118,6 +118,34 @@
     background: var(--surface2);
     border-color: rgba(91,196,187,0.35);
   }
+  #favBtn.fav-active {
+    background: rgba(245,166,35,.18);
+    border-color: rgba(245,166,35,.5);
+    color: var(--gold);
+  }
+  .loc-switch {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin: 2px 0 10px;
+    touch-action: pan-y;
+  }
+  .loc-dot {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: .5; transition: opacity .15s, transform .15s, border-color .15s, background .15s;
+  }
+  .loc-dot.active {
+    opacity: 1;
+    border-color: rgba(245,166,35,.5);
+    background: rgba(245,166,35,.15);
+    transform: scale(1.08);
+  }
 
   .suggestions {
     position: absolute; top: calc(100% + 6px); left: 0; right: 0;
@@ -1197,16 +1225,21 @@
       <div class="suggestions" id="suggestions" style="display:none"></div>
     </div>
     <button class="geo-btn" onclick="doGeo()" title="Usa la mia posizione">📍</button>
+    <button class="geo-btn" id="favBtn" onclick="toggleFavoriteCity()" title="Imposta questa città come preferita">☆</button>
     <button class="geo-btn" id="pwa-install-btn" onclick="installPWA()"
       title="Installa app" style="display:none;background:rgba(160,130,255,0.15);
       border-color:rgba(160,130,255,0.35);font-size:16px">⬇️</button>
   </div>
   <div class="geo-loading" id="geoStatus"></div>
 
-  <div class="header">
+  <div class="header" id="locHeader">
     <div class="city-label">⭐ Top Weather</div>
     <div class="city-name" id="cityName">Reggio Calabria</div>
     <div class="city-sub" id="citySub">Calabria, Italia</div>
+  </div>
+  <div class="loc-switch" id="locSwitch">
+    <button class="loc-dot active" id="locDotGps" onclick="goToGPSLocation()" title="La tua posizione">📍</button>
+    <button class="loc-dot" id="locDotFav" onclick="goToFavoriteLocation()" title="Città preferita">⭐</button>
   </div>
 
   <div class="tabs">
@@ -1252,6 +1285,23 @@ let currentLat = 38.1147, currentLon = 15.6500;
 let currentCity = 'Reggio Calabria', currentRegion = 'Calabria, Italia';
 let activeTab = 'meteo';
 let searchTimer = null;
+
+// Posizione GPS rilevata (per poterci tornare dopo aver aperto la preferita o una ricerca)
+let gpsLat = currentLat, gpsLon = currentLon, gpsCity = currentCity, gpsRegion = currentRegion;
+// Città preferita, persistita in localStorage, swipabile con la posizione GPS
+let favLat = null, favLon = null, favCity = null, favRegion = null;
+
+function loadFavoriteCity() {
+  try {
+    const raw = localStorage.getItem('tw_favorite_city');
+    if (!raw) return;
+    const f = JSON.parse(raw);
+    if (f && typeof f.lat === 'number' && typeof f.lon === 'number' && f.name) {
+      favLat = f.lat; favLon = f.lon; favCity = f.name; favRegion = f.region || '';
+    }
+  } catch(e) {}
+}
+loadFavoriteCity();
 
 const WMO = {
   0:{label:'Sereno',icon:'☀️'},1:{label:'Prevalentemente sereno',icon:'🌤️'},
@@ -1726,6 +1776,7 @@ async function applyPosition(pos) {
     currentCity = 'La tua posizione';
     currentRegion = `${currentLat.toFixed(2)}°N ${currentLon.toFixed(2)}°E`;
   }
+  gpsLat = currentLat; gpsLon = currentLon; gpsCity = currentCity; gpsRegion = currentRegion;
   updateHeader(); load();
 }
 
@@ -1820,7 +1871,75 @@ function selectCity(lat, lon, name, region) {
 function updateHeader() {
   document.getElementById('cityName').textContent = currentCity;
   document.getElementById('citySub').textContent = currentRegion;
+  updateLocationSwitchUI();
 }
+
+function isSameCoords(lat1, lon1, lat2, lon2) {
+  return lat1 != null && lat2 != null && Math.abs(lat1-lat2) < 0.001 && Math.abs(lon1-lon2) < 0.001;
+}
+
+// Imposta/rimuove la città attualmente mostrata come preferita (persistita in localStorage)
+function toggleFavoriteCity() {
+  if (favLat != null && isSameCoords(favLat, favLon, currentLat, currentLon)) {
+    favLat = favLon = favCity = favRegion = null;
+    try { localStorage.removeItem('tw_favorite_city'); } catch(e) {}
+  } else {
+    favLat = currentLat; favLon = currentLon; favCity = currentCity; favRegion = currentRegion;
+    try { localStorage.setItem('tw_favorite_city', JSON.stringify({lat:favLat, lon:favLon, name:favCity, region:favRegion})); } catch(e) {}
+  }
+  updateLocationSwitchUI();
+}
+
+function goToGPSLocation() {
+  if (gpsLat == null) { doGeo(); return; }
+  currentLat=gpsLat; currentLon=gpsLon; currentCity=gpsCity; currentRegion=gpsRegion;
+  astroInitialized = false; effInitialized = false;
+  updateHeader(); load();
+}
+
+function goToFavoriteLocation() {
+  if (favLat == null) return;
+  currentLat=favLat; currentLon=favLon; currentCity=favCity; currentRegion=favRegion;
+  astroInitialized = false; effInitialized = false;
+  updateHeader(); load();
+}
+
+function updateLocationSwitchUI() {
+  const favBtn = document.getElementById('favBtn');
+  const sw = document.getElementById('locSwitch');
+  const dotGps = document.getElementById('locDotGps');
+  const dotFav = document.getElementById('locDotFav');
+  if (!favBtn || !sw || !dotGps || !dotFav) return;
+  const isFavActive = favLat != null && isSameCoords(favLat, favLon, currentLat, currentLon);
+  favBtn.textContent = isFavActive ? '⭐' : '☆';
+  favBtn.classList.toggle('fav-active', isFavActive);
+  sw.style.display = favLat != null ? 'flex' : 'none';
+  dotGps.classList.toggle('active', !isFavActive);
+  dotFav.classList.toggle('active', isFavActive);
+}
+
+// Swipe orizzontale sull'header per passare da GPS a città preferita e viceversa
+(function initLocationSwipe() {
+  const header = document.getElementById('locHeader');
+  if (!header) return;
+  let sx = 0, sy = 0, tracking = false;
+  header.addEventListener('touchstart', e => {
+    if (!e.touches || !e.touches.length) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+  }, {passive:true});
+  header.addEventListener('touchend', e => {
+    if (!tracking) return;
+    tracking = false;
+    if (favLat == null) return; // niente preferita salvata: niente da swipare
+    const t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.3) return; // swipe troppo corto/verticale
+    const isFavActive = isSameCoords(favLat, favLon, currentLat, currentLon);
+    if (dx < 0 && !isFavActive) goToFavoriteLocation();
+    else if (dx > 0 && isFavActive) goToGPSLocation();
+  }, {passive:true});
+})();
 
 async function fetchWeather() {
   const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,uv_index&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,wind_speed_10m_max&forecast_days=7&wind_speed_unit=kmh`, { signal: AbortSignal.timeout(12000) });
@@ -2537,6 +2656,7 @@ function setRadarType(type, el) {
           currentRegion = `${currentLat.toFixed(2)}°N ${currentLon.toFixed(2)}°E`;
         })
         .finally(() => {
+          gpsLat = currentLat; gpsLon = currentLon; gpsCity = currentCity; gpsRegion = currentRegion;
           if (isLate) {
             // L'app era già partita con i default: aggiorna ora con la posizione reale
             updateHeader(); load();
