@@ -1237,10 +1237,7 @@
     <div class="city-name" id="cityName">Reggio Calabria</div>
     <div class="city-sub" id="citySub">Calabria, Italia</div>
   </div>
-  <div class="loc-switch" id="locSwitch">
-    <button class="loc-dot active" id="locDotGps" onclick="goToGPSLocation()" title="La tua posizione">📍</button>
-    <button class="loc-dot" id="locDotFav" onclick="goToFavoriteLocation()" title="Città preferita">⭐</button>
-  </div>
+  <div class="loc-switch" id="locSwitch"></div>
 
   <div class="tabs">
     <div class="tab active" data-name="meteo" onclick="switchTab('meteo',this)">
@@ -1288,16 +1285,28 @@ let searchTimer = null;
 
 // Posizione GPS rilevata (per poterci tornare dopo aver aperto la preferita o una ricerca)
 let gpsLat = currentLat, gpsLon = currentLon, gpsCity = currentCity, gpsRegion = currentRegion;
-// Città preferita, persistita in localStorage, swipabile con la posizione GPS
-let favLat = null, favLon = null, favCity = null, favRegion = null;
+// Città preferite (max 2), persistite in localStorage, swipabili con la posizione GPS
+const MAX_FAVORITES = 2;
+let favorites = [];
 
 function loadFavoriteCity() {
   try {
-    const raw = localStorage.getItem('tw_favorite_city');
-    if (!raw) return;
-    const f = JSON.parse(raw);
-    if (f && typeof f.lat === 'number' && typeof f.lon === 'number' && f.name) {
-      favLat = f.lat; favLon = f.lon; favCity = f.name; favRegion = f.region || '';
+    const raw = localStorage.getItem('tw_favorite_cities');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        favorites = arr.filter(f => f && typeof f.lat === 'number' && typeof f.lon === 'number' && f.name).slice(0, MAX_FAVORITES);
+      }
+      return;
+    }
+    // Migrazione dalla vecchia singola preferita
+    const old = localStorage.getItem('tw_favorite_city');
+    if (old) {
+      const f = JSON.parse(old);
+      if (f && typeof f.lat === 'number' && typeof f.lon === 'number' && f.name) {
+        favorites = [{lat:f.lat, lon:f.lon, name:f.name, region:f.region || ''}];
+        localStorage.setItem('tw_favorite_cities', JSON.stringify(favorites));
+      }
     }
   } catch(e) {}
 }
@@ -1878,15 +1887,27 @@ function isSameCoords(lat1, lon1, lat2, lon2) {
   return lat1 != null && lat2 != null && Math.abs(lat1-lat2) < 0.001 && Math.abs(lon1-lon2) < 0.001;
 }
 
-// Imposta/rimuove la città attualmente mostrata come preferita (persistita in localStorage)
+function saveFavorites() {
+  try { localStorage.setItem('tw_favorite_cities', JSON.stringify(favorites)); } catch(e) {}
+}
+function favIndexOfCurrent() {
+  return favorites.findIndex(f => isSameCoords(f.lat, f.lon, currentLat, currentLon));
+}
+
+// Aggiunge/rimuove la città mostrata dai preferiti (max 2: se piene, sostituisce la più vecchia)
 function toggleFavoriteCity() {
-  if (favLat != null && isSameCoords(favLat, favLon, currentLat, currentLon)) {
-    favLat = favLon = favCity = favRegion = null;
-    try { localStorage.removeItem('tw_favorite_city'); } catch(e) {}
+  const i = favIndexOfCurrent();
+  const st = document.getElementById('geoStatus');
+  if (i >= 0) {
+    favorites.splice(i, 1);
   } else {
-    favLat = currentLat; favLon = currentLon; favCity = currentCity; favRegion = currentRegion;
-    try { localStorage.setItem('tw_favorite_city', JSON.stringify({lat:favLat, lon:favLon, name:favCity, region:favRegion})); } catch(e) {}
+    if (favorites.length >= MAX_FAVORITES) {
+      const removed = favorites.shift();
+      if (st) { st.textContent = `Preferiti pieni: ${removed.name} sostituita da ${currentCity}`; setTimeout(() => { if (st.textContent.startsWith('Preferiti pieni')) st.textContent = ''; }, 3500); }
+    }
+    favorites.push({lat:currentLat, lon:currentLon, name:currentCity, region:currentRegion});
   }
+  saveFavorites();
   updateLocationSwitchUI();
 }
 
@@ -1897,28 +1918,40 @@ function goToGPSLocation() {
   updateHeader(); load();
 }
 
-function goToFavoriteLocation() {
-  if (favLat == null) return;
-  currentLat=favLat; currentLon=favLon; currentCity=favCity; currentRegion=favRegion;
+function goToFavoriteLocation(i) {
+  const f = favorites[i];
+  if (!f) return;
+  currentLat=f.lat; currentLon=f.lon; currentCity=f.name; currentRegion=f.region;
   astroInitialized = false; effInitialized = false;
   updateHeader(); load();
+}
+
+// Indice nella sequenza [GPS, pref1, pref2]; -1 se la città corrente è una ricerca libera
+function currentLocSlot() {
+  const fi = favIndexOfCurrent();
+  if (fi >= 0) return fi + 1;
+  if (isSameCoords(gpsLat, gpsLon, currentLat, currentLon)) return 0;
+  return -1;
 }
 
 function updateLocationSwitchUI() {
   const favBtn = document.getElementById('favBtn');
   const sw = document.getElementById('locSwitch');
-  const dotGps = document.getElementById('locDotGps');
-  const dotFav = document.getElementById('locDotFav');
-  if (!favBtn || !sw || !dotGps || !dotFav) return;
-  const isFavActive = favLat != null && isSameCoords(favLat, favLon, currentLat, currentLon);
-  favBtn.textContent = isFavActive ? '⭐' : '☆';
-  favBtn.classList.toggle('fav-active', isFavActive);
-  sw.style.display = favLat != null ? 'flex' : 'none';
-  dotGps.classList.toggle('active', !isFavActive);
-  dotFav.classList.toggle('active', isFavActive);
+  if (!favBtn || !sw) return;
+  const fi = favIndexOfCurrent();
+  favBtn.textContent = fi >= 0 ? '⭐' : '☆';
+  favBtn.classList.toggle('fav-active', fi >= 0);
+  if (!favorites.length) { sw.style.display = 'none'; sw.innerHTML = ''; return; }
+  const slot = currentLocSlot();
+  let html = `<button class="loc-dot${slot===0?' active':''}" onclick="goToGPSLocation()" title="La tua posizione">📍</button>`;
+  favorites.forEach((f, i) => {
+    html += `<button class="loc-dot${slot===i+1?' active':''}" onclick="goToFavoriteLocation(${i})" title="${f.name.replace(/"/g,'&quot;')}">${i===0?'⭐':'🌟'}</button>`;
+  });
+  sw.innerHTML = html;
+  sw.style.display = 'flex';
 }
 
-// Swipe orizzontale sull'header per passare da GPS a città preferita e viceversa
+// Swipe orizzontale sull'header: GPS ⇄ preferita 1 ⇄ preferita 2
 (function initLocationSwipe() {
   const header = document.getElementById('locHeader');
   if (!header) return;
@@ -1930,14 +1963,15 @@ function updateLocationSwitchUI() {
   header.addEventListener('touchend', e => {
     if (!tracking) return;
     tracking = false;
-    if (favLat == null) return; // niente preferita salvata: niente da swipare
+    if (!favorites.length) return;
     const t = e.changedTouches && e.changedTouches[0];
     if (!t) return;
     const dx = t.clientX - sx, dy = t.clientY - sy;
-    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.3) return; // swipe troppo corto/verticale
-    const isFavActive = isSameCoords(favLat, favLon, currentLat, currentLon);
-    if (dx < 0 && !isFavActive) goToFavoriteLocation();
-    else if (dx > 0 && isFavActive) goToGPSLocation();
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+    const slot = currentLocSlot();
+    const target = dx < 0 ? slot + 1 : (slot === -1 ? 0 : slot - 1);
+    if (target < 0 || target > favorites.length) return;
+    if (target === 0) goToGPSLocation(); else goToFavoriteLocation(target - 1);
   }, {passive:true});
 })();
 
