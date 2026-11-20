@@ -123,6 +123,15 @@
     border-color: rgba(245,166,35,.5);
     color: var(--gold);
   }
+  .summary-card {
+    margin: 0 16px 14px; padding: 14px 16px; border-radius: 18px;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .summary-head { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 10px; }
+  .summary-row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--text); line-height: 1.4; }
+  .summary-row .si { font-size: 16px; width: 22px; text-align: center; flex-shrink: 0; }
+  .summary-row b { color: var(--gold); font-weight: 600; font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 1px; }
+  .summary-foot { font-size: 9.5px; color: var(--muted); margin-top: 8px; opacity: .8; }
   .loc-switch {
     display: none;
     justify-content: center;
@@ -1342,8 +1351,21 @@ const WMO = {
   81:{label:'Rovesci moderati',icon:'🌧️'},82:{label:'Rovesci violenti',icon:'⛈️'},
   95:{label:'Temporale',icon:'⛈️'},96:{label:'Temporale con grandine',icon:'🌩️'},
   99:{label:'Temporale forte',icon:'🌩️'},
+  56:{label:'Pioggerella gelata',icon:'🌧️'},57:{label:'Pioggerella gelata intensa',icon:'🌧️'},
+  66:{label:'Pioggia gelata',icon:'🌧️'},67:{label:'Pioggia gelata intensa',icon:'🌧️'},
+  77:{label:'Granelli di neve',icon:'🌨️'},85:{label:'Rovesci di neve',icon:'🌨️'},
+  86:{label:'Rovesci di neve intensi',icon:'❄️'},
 };
 const getWMO = c => WMO[c] || {label:'Variabile',icon:'🌡️'};
+// Icona/etichetta del giorno coerenti con le precipitazioni previste: se il codice è asciutto
+// ma sono attesi mm significativi, mostra pioggia
+function dayCondition(code, mm) {
+  const w = getWMO(code);
+  const wet = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
+  const snowy = (code >= 71 && code <= 77) || code === 85 || code === 86;
+  if (!wet && !snowy && mm >= 1) return mm >= 5 ? {label:'Piogge', icon:'🌧️'} : {label:'Piovaschi', icon:'🌦️'};
+  return w;
+}
 const DAYS_IT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
 const MONTHS_IT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
 const formatDate = d => `${DAYS_IT[d.getDay()]} ${d.getDate()} ${MONTHS_IT[d.getMonth()]}`;
@@ -1994,7 +2016,7 @@ function updateLocationSwitchUI() {
 })();
 
 async function fetchWeather() {
-  const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,uv_index&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,wind_speed_10m_max&forecast_days=7&wind_speed_unit=kmh`, { signal: AbortSignal.timeout(12000) });
+  const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&timezone=auto&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,uv_index&hourly=temperature_2m,weather_code,precipitation,precipitation_probability,wind_gusts_10m,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,wind_speed_10m_max&forecast_days=7&wind_speed_unit=kmh`, { signal: AbortSignal.timeout(12000) });
   if (!r.ok) throw new Error('Meteo non disponibile');
   return r.json();
 }
@@ -2261,6 +2283,107 @@ function getIcon(code, timeIso, sunriseIso, sunsetIso) {
   return getWMO(code).icon;
 }
 
+// Sintesi testuale automatica (regole sui dati del modello, nessun servizio esterno)
+function buildWeatherSummary(wd, start) {
+  try {
+    const h = wd.hourly, d = wd.daily, c = wd.current;
+    if (!h || !h.precipitation || !h.pressure_msl) return '';
+    const end12 = Math.min(start + 12, h.time.length);
+    const fmtH = i => formatTime(h.time[i]);
+
+    let sum12 = 0, firstRain = -1, lastRain = -1, maxProb = 0, thunder = false, snow = false;
+    let tMin = Infinity, tMax = -Infinity, gust = 0;
+    for (let i = start; i < end12; i++) {
+      const p = h.precipitation[i] || 0;
+      sum12 += p;
+      if (p >= 0.2) { if (firstRain < 0) firstRain = i; lastRain = i; }
+      maxProb = Math.max(maxProb, (h.precipitation_probability && h.precipitation_probability[i]) || 0);
+      const code = h.weather_code[i];
+      if (code >= 95) thunder = true;
+      if ((code >= 71 && code <= 77) || code === 85 || code === 86) snow = true;
+      if (h.temperature_2m[i] != null) { tMin = Math.min(tMin, h.temperature_2m[i]); tMax = Math.max(tMax, h.temperature_2m[i]); }
+      gust = Math.max(gust, h.wind_gusts_10m[i] || 0);
+    }
+    const rainingNow = (h.precipitation[start] || 0) >= 0.2;
+    const kind = snow ? 'nevicate' : 'piogge';
+    const intens = sum12 < 2 ? 'deboli' : (sum12 < 10 ? 'moderate' : 'intense');
+
+    let rainText;
+    if (firstRain < 0) {
+      rainText = maxProb >= 40 ? `Nessuna precipitazione significativa attesa, ma con probabilità fino al ${Math.round(maxProb)}%.`
+                               : 'Asciutto, nessuna precipitazione attesa.';
+    } else if (rainingNow) {
+      rainText = `${kind[0].toUpperCase() + kind.slice(1)} ${intens} in corso` +
+        (lastRain < end12 - 1 ? `, in attenuazione dalle ${fmtH(lastRain + 1)}` : ', che proseguono nelle prossime ore') +
+        ` (circa ${sum12.toFixed(1)} mm).`;
+    } else {
+      rainText = `${thunder ? 'Temporali attesi' : kind[0].toUpperCase() + kind.slice(1) + ' ' + intens + ' attese'} dalle ${fmtH(firstRain)} (circa ${sum12.toFixed(1)} mm).`;
+    }
+
+    // Temperatura: prossime 12 ore + confronto domani/oggi
+    let tempText = `${Math.round(tMin)}–${Math.round(tMax)}°C nelle prossime 12 ore`;
+    if (d.temperature_2m_max.length > 1) {
+      const diff = d.temperature_2m_max[1] - d.temperature_2m_max[0];
+      const tr = diff >= 2 ? `in aumento (+${Math.round(diff)}°)` : (diff <= -2 ? `in calo (${Math.round(diff)}°)` : 'stabili');
+      tempText += `; domani max ${Math.round(d.temperature_2m_max[1])}°, ${tr}.`;
+    } else tempText += '.';
+
+    // Vento
+    const wLvl = gust >= 75 ? 'forte' : (gust >= 50 ? 'sostenuto' : (gust >= 30 ? 'moderato' : 'debole'));
+    const windText = `Vento ${wLvl} da ${windDir(c.wind_direction_10m)}` + (gust >= 30 ? `, raffiche fino a ${Math.round(gust)} km/h.` : '.');
+
+    // Pressione: variazione nelle prossime 6 ore
+    const i6 = Math.min(start + 6, h.pressure_msl.length - 1);
+    const dp = (h.pressure_msl[i6] ?? h.pressure_msl[start]) - h.pressure_msl[start];
+    const pTrend = dp <= -3 ? 'in forte calo: tendenza al peggioramento' : (dp <= -1.5 ? 'in calo: tendenza a variabilità' :
+                   (dp >= 3 ? 'in forte aumento: tendenza al miglioramento' : (dp >= 1.5 ? 'in aumento: tendenza al miglioramento' : 'stabile')));
+    const pressText = `${Math.round(h.pressure_msl[start])} hPa, ${pTrend}.`;
+
+    // Prossimi due giorni
+    const dayLine = i => {
+      if (i >= d.time.length) return '';
+      const name = i === 1 ? 'Domani' : DAYS_IT[new Date(d.time[i]).getDay()];
+      const rain = d.precipitation_sum[i] >= 0.5 ? `, ${d.precipitation_sum[i].toFixed(1)} mm` : '';
+      const dc = dayCondition(d.weather_code[i], d.precipitation_sum[i] || 0);
+      return `${dc.icon} ${name}: ${dc.label.toLowerCase()}, ${Math.round(d.temperature_2m_min[i])}–${Math.round(d.temperature_2m_max[i])}°${rain}`;
+    };
+    const nextDays = [dayLine(1), dayLine(2)].filter(Boolean).join('<br>');
+
+    // Frase di apertura
+    let head;
+    const code0 = c.weather_code;
+    if (thunder) head = firstRain >= 0 && !rainingNow ? `Rischio temporali dalle ${fmtH(firstRain)}.` : 'Rischio temporali nelle prossime ore.';
+    else if (rainingNow) head = snow ? 'Nevica in questo momento.' : 'Piove in questo momento.';
+    else if (firstRain >= 0) head = `Peggioramento: ${kind} in arrivo dalle ${fmtH(firstRain)}.`;
+    else if (code0 === 45 || code0 === 48) head = 'Presenza di nebbia, per il resto senza precipitazioni.';
+    else if (code0 <= 1) head = 'Tempo stabile e soleggiato nelle prossime ore.';
+    else head = 'Cielo nuvoloso ma asciutto nelle prossime ore.';
+    if (dp <= -3) head += ' Pressione in calo.';
+    else if (dp >= 3) head += ' Pressione in aumento.';
+
+    // Icone coerenti con quanto riportato nel testo
+    const skyIcon = getIcon(code0, h.time[start], d.sunrise[0], d.sunset[0]);
+    const rainIcon = thunder ? '⛈️' : ((rainingNow || firstRain >= 0)
+      ? (snow ? '❄️' : (sum12 >= 2 ? '🌧️' : '🌦️')) : skyIcon);
+    const tempIcon = tMax >= 33 ? '🔥' : (tMax <= 2 ? '🥶' : '🌡️');
+    const windIcon = gust >= 50 ? '🌬️' : (gust >= 30 ? '💨' : '🍃');
+    const pressIcon = dp <= -1.5 ? '📉' : (dp >= 1.5 ? '📈' : '➡️');
+
+    const row = (ic, t, txt) => `<div class="summary-row"><div class="si">${ic}</div><div><b>${t}</b>${txt}</div></div>`;
+    return `
+    <div class="section-title">Sintesi e tendenza</div>
+    <div class="summary-card">
+      <div class="summary-head">${rainIcon} ${head}</div>
+      ${row(rainIcon, 'Prossime 12 ore', rainText)}
+      ${row(tempIcon, 'Temperatura', tempText)}
+      ${row(windIcon, 'Vento', windText)}
+      ${row(pressIcon, 'Pressione', pressText)}
+      ${nextDays ? row('📅', 'Prossimi giorni', nextDays) : ''}
+      <div class="summary-foot">Sintesi automatica generata dai dati del modello (Open-Meteo)</div>
+    </div>`;
+  } catch (e) { return ''; }
+}
+
 function render(weatherData, marineData, pollenData) {
   const c = weatherData.current, d = weatherData.daily, h = weatherData.hourly;
   const wmo = getWMO(c.weather_code);
@@ -2313,6 +2436,8 @@ function render(weatherData, marineData, pollenData) {
       </div>
     </div>` : '';
 
+  const summaryHTML = buildWeatherSummary(weatherData, start);
+
   // METEO panel
   const meteoHTML = `
     ${alertsInlineHTML}
@@ -2333,6 +2458,7 @@ function render(weatherData, marineData, pollenData) {
         <div class="stat-item"><div class="stat-icon">🔆</div><div class="stat-value">UV ${Math.round(c.uv_index)}</div><div class="stat-label">Indice UV</div></div>
       </div>
     </div>
+    ${summaryHTML}
     <div class="section-title">Prossime ore</div>
     <div class="hourly-scroll">
       ${hourSlots.map(s=>`<div class="hour-card ${s.isNow?'active':''}"><div class="hour-time">${s.isNow?'Ora':formatTime(s.time)}</div><div class="hour-icon">${s.icon}</div><div class="hour-temp">${s.temp}°</div></div>`).join('')}
@@ -2347,8 +2473,9 @@ function render(weatherData, marineData, pollenData) {
     <div class="daily-list">
       ${d.weather_code.map((code,i)=>{
         const date=new Date(d.time[i]);
-        const w=getWMO(code);
-        const rain=d.precipitation_sum[i]>0?`🌧 ${d.precipitation_sum[i].toFixed(1)}mm`:w.label.split(' ')[0];
+        const mm=d.precipitation_sum[i]||0;
+        const w=dayCondition(code, mm);
+        const rain=mm>=0.5?`${w.label} · ${mm.toFixed(1)}mm`:w.label;
         return `<div class="day-row"><div class="day-name">${i===0?'Oggi':DAYS_IT[date.getDay()]}</div><div class="day-icon">${w.icon}</div><div class="day-desc">${rain}</div><div class="day-temps"><span class="day-high">${Math.round(d.temperature_2m_max[i])}°</span><span class="day-low">${Math.round(d.temperature_2m_min[i])}°</span></div></div>`;
       }).join('')}
     </div>`;
