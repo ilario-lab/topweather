@@ -2597,6 +2597,32 @@ function render(weatherData, marineData, pollenData) {
       <div id="eff-content"><div class="loading"><div class="loading-icon">☀️</div><div class="loading-text">Calcolo effemeridi...</div></div></div>
     </div>`;
   document.getElementById('weather-content').innerHTML = html;
+  resetRebuiltPanels();
+}
+
+// render() ricostruisce tutti i pannelli, quindi quelli inizializzati "al primo accesso"
+// (METAR, Modelli, Astronomia, Effemeridi) tornano al placeholder. Vanno azzerati e, se il
+// pannello è quello aperto, reinizializzati: altrimenti il flag resta true e il placeholder
+// ("Inizializza METAR...") rimane per sempre.
+function resetRebuiltPanels() {
+  // Modelli: ferma le animazioni e scarta le mappe i cui contenitori non esistono più
+  clearInterval(gfsTimer); gfsPlaying = false;
+  clearInterval(icon850Timer); icon850Playing = false;
+  clearInterval(precipTimer); precipPlaying = false;
+  [gfsMap, icon850Map, precipMap].forEach(m => { try { if (m) m.remove(); } catch(e) {} });
+  gfsMap = icon850Map = precipMap = null;
+  gfsInitialized = icon850Initialized = precipInitialized = false;
+
+  metarInitialized = false;
+  astroInitialized = false;
+  effInitialized = false;
+
+  // Se l'utente è su uno di questi tab, ricostruisce subito il contenuto
+  if (activeTab === 'metar') initMetar();
+  else if (activeTab === 'gfs') initGFS();
+  else if (activeTab === 'ventusky') initAstro();
+  else if (activeTab === 'effemeridi') initEffemeridi();
+  else if (activeTab === 'terremoti') initQuakes();
 }
 
 async function load() {
